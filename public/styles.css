@@ -1,0 +1,53 @@
+html, body, #root, #root>div {
+    height: 100%;
+    width: 100%;
+    margin: 0px;
+    padding: 0px;
+    background-color: #000;
+}
+
+.team-cursor1 {
+  background: red;
+  width: 2px !important;
+}
+
+.team-cursor2 {
+  background: yellow;
+  width: 2px !important;
+}
+
+.team-cursor3 {
+  background: cyan;
+  width: 2px !important;
+}
+
+.team-cursor4 {
+  background: blue;
+  width: 2px !important;
+}
+
+.team-cursor5 {
+  background: blueviolet;
+  width: 2px !important;
+}
+
+
+/* width */
+::-webkit-scrollbar {
+    width: 7px;
+}
+  
+  /* Track */
+::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+  
+  /* Handle */
+::-webkit-scrollbar-thumb {
+    background: gray;
+}
+  
+  /* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: #ababab;
+}

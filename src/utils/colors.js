@@ -1,0 +1,5 @@
+export const BACKGROUND = '#000'
+export const SEMI_BACK = '#191919'
+export const PRIMARY = '#3E065F'
+export const SECONDARY = '#700B97'
+export const FOURTH = '#8E05C2'

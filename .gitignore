@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+/websocket/node_modules
+/.history
 /.pnp
 .pnp.js
 

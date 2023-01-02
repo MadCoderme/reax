@@ -30,48 +30,63 @@ import {
   Select,
   Card,
   CardBody,
+  useToast,
+  Circle,
+  HStack,
 
 } from '@chakra-ui/react';
-import { VscEdit, VscTrash } from "react-icons/vsc"
+import { VscEdit, VscNewFile, VscTrash } from "react-icons/vsc"
 import CodeEditor from "@monaco-editor/react"
 import io from "socket.io-client"
-
+import { Octokit, App } from "octokit"
 
 import { SEMI_BACK } from "../../utils/colors";
+import ComponentEditor from './components/ComponentEditor'
+import Menu from "./components/Menu";
+import { useSearchParams } from "react-router-dom";
+import LibraryManager from "./components/LibraryManager";
 
 const socket = io("ws://localhost:3001");
-
-const uid = +new Date()
 var inter = null
+const uid = +new Date()
 
 export default function Editor(params) {
 
-    const [code, setCode] = useState(`
-    import React from 'react'
-
-    export default function App () {
-        return (
-            <div>
-                <p>hello</p>
-            </div>
-        )
-    }`);
+    const [code, setCode] = useState(``);
     const [editor, setEditor] = useState(null)
+    const [searchParams, setSearchParams] = useSearchParams()
     const componentEditor = useRef()
     const functionEditor = useRef()
     const packageEditor = useRef()
     const utilsLib = useRef()
+    const libManager = useRef()
+    const toast = useToast()
+
+    useEffect(() => {
+        const id = searchParams.get('app')
+        let file = searchParams.get('file')
+        if(!id) return
+        if(!file) {
+            searchParams.set('file', 'src/index.js')
+            setSearchParams(searchParams)
+            file = 'src/index.js'
+        }
+
+        fetch(`http://localhost:5000/readFile?path=${id}/${file}`)
+            .then(response => response.text())
+            .then(responseText => {
+                if(editor) {
+                    editor.setValue(responseText)
+                    return
+                }
+                setCode(responseText)
+            })
+    }, [searchParams])
 
     useEffect(() => {
         socket.on('connect', () => {
             //alert('connected to socket io')
-        });
-
-        socket.on('code', e => {
-            if(e.uid !== uid && e.newCode !== code) {
-                setCode(e.newCode)
-            }
-        })
+        });     
 
         return () => {
             socket.off('connect');
@@ -82,7 +97,47 @@ export default function Editor(params) {
     }, [])
 
     const editorOnMount = (e, m) => {
+        var shouldSend = true
         setEditor(e)
+
+        e.onDidChangeModelContent(ev => {
+            if(!shouldSend) {
+                shouldSend = true
+                return
+            }
+            let params = new URLSearchParams(window.location.search);
+            let app = params.get('app')
+            let file = params.get('file')
+            socket.emit('code', {
+                change: ev.changes[0].text,
+                range: ev.changes[0].range,
+                app,
+                file,
+                uid: uid
+            })
+        })
+
+        e.onKeyDown(ev => {
+            if(ev.browserEvent.ctrlKey  && ev.browserEvent.code === "KeyS") {
+                ev.preventDefault()
+                const params = new URLSearchParams(window.location.search);
+                const app = params.get('app')
+                const file = params.get('file')
+                const content = encodeURIComponent(e.getValue())
+                fetch(`http://localhost:5000/writeFile?path=${app}/${file}&content=${content}`)
+                    .then(response => response.json())
+                    .then(responseJson => {
+                        //console.log(responseJson)
+                        toast({
+                            title: 'Saved Successfully',
+                            status: 'success',
+                            duration: 2000,
+                            isClosable: true,
+                        })
+                    })
+            }
+        })
+
         m.languages.registerCompletionItemProvider('javascript', {
             provideCompletionItems: function() {
                 return {
@@ -114,7 +169,11 @@ export default function Editor(params) {
         const colors = ['team-cursor1', 'team-cursor2', 'team-cursor3', 'team-cursor4', 'team-cursor5'] 
 
         socket.on('cursorPos', ev => {
-            if(ev.uid !== uid) {
+            let params = new URLSearchParams(window.location.search);
+            let app = params.get('app')
+            let file = params.get('file')
+
+            if(ev.uid !== uid && ev.app === app && ev.file === file) {
                 const randomCursor = colors[Math.floor(Math.random() * colors.length)];
                 let exists = cursors.find(el => el.uid === ev.uid)
                 if(exists) {
@@ -132,26 +191,39 @@ export default function Editor(params) {
                 }
             }
         })
+
+        socket.on('code', ev => {
+            const params = new URLSearchParams(window.location.search);
+            const app = params.get('app')
+            const file = params.get('file')
+            if(ev.uid !== uid && app === ev.app && file === ev.file) {
+                const id = { major: 1, minor: 1 };
+                const op = {
+                    identifier: id,
+                    range: ev.range,
+                    text: ev.change,
+                    forceMoveMarkers: true,
+                };
+
+                const changes = [op]
+                shouldSend = false
+                e.executeEdits('my-source', changes);
+            }
+        })
     }
 
     const sendUpdates = (e) => {
-        var prevCode = ``
         var prevPos = null
         inter = setInterval(() => {
-            let currCode = e.getValue()
             let currPosition = e.getPosition()
-
-            if(prevCode !== currCode) {
-                socket.emit('code', {
-                    newCode: currCode,
-                    uid: uid
-                })
-                prevCode =  currCode.repeat(1)
-            } 
-
+            let params = new URLSearchParams(window.location.search);
+            let app = params.get('app')
+            let file = params.get('file')
             if(prevPos !== currPosition) {
                 socket.emit('cursorPos', {
                     newPos: currPosition,
+                    app,
+                    file,
                     uid: uid
                 })
                 prevPos = currPosition
@@ -162,7 +234,8 @@ export default function Editor(params) {
 
     return (
         <Box minH="100%">
-            <Grid templateColumns='repeat(6, 1fr)' gap={0} height="100%">
+            <Menu  app={searchParams.get('app')} />
+            <Grid templateColumns='repeat(6, 1fr)' gap={0} height="95%">
                 <GridItem colSpan={1} h='100%'>
                     <SidebarContent
                         display={{ base: 'none', md: 'block' }}
@@ -171,21 +244,27 @@ export default function Editor(params) {
                         functionEditor={functionEditor}
                         packageEditor={packageEditor}
                         utilsLib={utilsLib}
+                        libManager={libManager}
                     />
                 </GridItem>
-                <GridItem colSpan={4} h='100%'>
-                    <CodeEditor
-                        height="100%"
-                        width="100%"
-                        defaultLanguage="javascript"
-                        value={code}
-                        theme="vs-dark"
-                        onMount={editorOnMount}
-                        onChange={v => setCode(v)}
-                    />
+                <GridItem colSpan={4} h='100%' bg="blackAlpha.500">
+                    <Box height="3%" background="#2b2d2f" pl={5} pr={5} alignItems="center">
+                        <Text color="whiteAlpha.500" fontSize={14}>{searchParams.get('file')}</Text>
+                    </Box>
+                    <div style={{height: '97%'}}>
+                        <CodeEditor
+                            height="100%"
+                            width="100%"
+                            defaultLanguage="javascript"
+                            defaultValue={code}
+                            theme="vs-dark"
+                            onMount={editorOnMount}
+                            onChange={v => setCode(v)}
+                        />
+                    </div>
                 </GridItem>
                 <GridItem colSpan={1} h='100%'>
-                    <SidebarContent
+                    <SidebarContentRight
                         display={{ base: 'none', md: 'block' }}
                     />
                 </GridItem>
@@ -195,6 +274,7 @@ export default function Editor(params) {
             <FunctionsEditor ref={functionEditor} />
             <PackageEditor ref={packageEditor} />
             <UtilsLibrary ref={utilsLib} />
+            <LibraryManager ref={libManager} />
            
             {/* <Drawer
                 autoFocus={false}
@@ -218,44 +298,12 @@ const LinkItems = [
     { name: 'Text', code: '<Text title={""} />' }
 ];
 
-const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, packageEditor, utilsLib, ...rest }) => {
+const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, packageEditor, utilsLib, libManager, ...rest }) => {
 
-    const insertComponent = (link) => {
-        const selection = editor.getSelection();
-        const id = { major: 1, minor: 1 };
-        const op = {
-            identifier: id,
-            range: {
-                startLineNumber: selection?.selectionStartLineNumber || 1,
-                startColumn: selection?.selectionStartColumn || 1,
-                endLineNumber: selection?.endLineNumber || 1,
-                endColumn: selection?.endColumn || 1,
-            },
-            text: link.code,
-            forceMoveMarkers: true,
-        };
-
-        const idi = { major: 2, minor: 2 };
-        const opi = {
-            identifier: idi,
-            range: {
-                startLineNumber: 1,
-                startColumn: 1,
-                endLineNumber: 1,
-                endColumn: 1,
-            },
-            text: 'import ' + link.name + ' from "components/' + link.name + '" \n',
-            forceMoveMarkers: true,
-        };
-
-        const value = editor.getValue()
-        const changes = value.includes('import ' + link.name + ' from "components/' + link.name + '" \n') ? [op] : [op, opi]
-
-        editor.executeEdits('my-source', changes);
-    }
-
+    const [searchParams, setSearchParams] = useSearchParams()
+    const newModal = useRef()
     const [dirs, setDirs] = useState({
-        'src': ['index.js'],
+        'src': [],
         'components': [
             'Hero',
             'Footer',
@@ -266,46 +314,167 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             'isOdd'
         ]
     })
+    const [mates, setMates] = useState({})
+
+    useEffect(() => {
+        const id = searchParams.get('app')
+        if(!id) return  
+
+        let prev = {...dirs}
+
+        fetch(`http://localhost:5000/readFolder?path=${id}/src`)
+            .then(response => response.json())
+            .then(responseJson => {
+                prev.src = responseJson
+                fetch(`http://localhost:5000/readFolder?path=${id}/components`)
+                .then(response => response.json())
+                .then(responseJson => {
+                    prev.components = responseJson.filter(el => !el.endsWith('.json'))
+                    fetch(`http://localhost:5000/readFolder?path=${id}/utils`)
+                    .then(response => response.json())
+                    .then(responseJson => {
+                        prev.utils = responseJson.filter(el => el !== 'index.js')
+                        setDirs(prev)
+                    })
+                })
+            })
+        
+    }, [searchParams])
+
+    useEffect(() => {
+        socket.on('fileSwitch', e => {
+            let params = new URLSearchParams(window.location.search);
+            let app = params.get('app')
+            let file = params.get('file')
+
+            if(e.app === app && e.uid !== uid) {
+                const paths = e.file.split('/')
+                let prev = {...mates}
+                if(prev[paths[0]]) {
+                    if(prev[paths[0]][paths[1]] && !prev[paths[0]][paths[1]].includes(e.uid)) prev[paths[0]][paths[1]].push(e.uid)
+                    else prev[paths[0]][paths[1]] = [e.uid]
+                } else{
+                    prev[paths[0]] = {}
+                    prev[paths[0]][paths[1]] = [e.uid]
+                }
+                setMates(prev)
+            }
+        })
+    }, [])
+    
+    const openFile = (name, title) => {
+        searchParams.set('file', title + '/' + name)
+        setSearchParams(searchParams)
+        let params = new URLSearchParams(window.location.search);
+        let app = params.get('app')
+        let file = params.get('file')
+        socket.emit('fileSwitch', {
+            uid,
+            app,
+            file
+        })
+    }
+
+    const insertComponent = (item) => {
+        const id = searchParams.get('app')
+        if(!id) return  
+
+        fetch(`http://localhost:5000/readFile?path=${id}/components/config_${item.substring(0, item.lastIndexOf('.'))}.json`)
+            .then(response => response.text())
+            .then(responseText => {
+                let code = JSON.parse(responseText)?.find(el => el?.code != null)?.code
+
+                const selection = editor.getSelection();
+                const id = { major: 1, minor: 1 };
+                const op = {
+                    identifier: id,
+                    range: {
+                        startLineNumber: selection?.selectionStartLineNumber || 1,
+                        startColumn: selection?.selectionStartColumn || 1,
+                        endLineNumber: selection?.endLineNumber || 1,
+                        endColumn: selection?.endColumn || 1,
+                    },
+                    text: code,
+                    forceMoveMarkers: true,
+                };
+
+                const idi = { major: 2, minor: 2 };
+                const opi = {
+                    identifier: idi,
+                    range: {
+                        startLineNumber: 1,
+                        startColumn: 1,
+                        endLineNumber: 1,
+                        endColumn: 1,
+                    },
+                    text: 'import ' + item.substring(0, item.lastIndexOf('.')) + ' from "../components/' + item + '" \n',
+                    forceMoveMarkers: true,
+                };
+
+                const value = editor.getValue()
+                const changes = value.includes('import ' + item.substring(0, item.lastIndexOf('.')) + ' from "../components/' + item + '" \n') ? [op] : [op, opi]
+
+                editor.executeEdits('my-source', changes);
+            })
+    }
 
     const Item = ({title, i}) => (
         <AccordionItem borderWidth={0} borderColor={SEMI_BACK} key={i}> 
             <h2>
                 <AccordionButton width={'auto'}  _hover={{
-                    bg: 'cyan.800',
+                    bg: 'cyan.900',
                     color: 'white',
-                }} borderRadius={10} ml={2} padding={2}>
+                }} borderRadius={10} ml={2} padding={2}
+                >
                     <AccordionIcon color={'cyan.400'} />
                     <Box as="span" flex='1' textAlign='left' color={"cyan.300"}>
                         {title}
                     </Box>
+                    <Button variant="ghost" display="inline-block" 
+                            ml={2}  _hover={{bg: 'whiteAlpha.100'}} _active={{bg: 'whiteAlpha.200'}}
+                            onClick={() => newModal?.current?.open(title)}>
+                        <VscNewFile color={'white'} />
+                    </Button>
                 </AccordionButton>
             </h2>
             <AccordionPanel borderWidth={0} pb={4}>
                 {dirs[title].map((item) => 
                     <Button textAlign='left' ml={5} mb={2} variant="ghost" _hover={{
-                        bg: 'rgba(255,255,255,0.1)'
-                    }} key={item}>
+                        bg: 'whiteAlpha.50'
+                    }} _active={{
+                        bg: 'whiteAlpha.100'
+                    }} 
+                    key={item}
+                    onClick={() => title === "src" && openFile(item, title)}>
                         <Grid templateColumns='repeat(2, 1fr)' gap={2}>
                             <GridItem w='100%'>
-                                <Text color="cyan.300">{item}</Text>
+                                <Text color="cyan.300">{item.length > 10 ? item.substring(0, 10) + '...' : item}</Text>
                             </GridItem>
                             <GridItem w='100%' >
                                 {title === "components" ? <>
                                     <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => componentEditor?.current?.open(item)}>
                                         Edit
                                     </Button>
-                                    <Button size="xs" onClick={() => insertComponent({code: '<Header title={""} />', name: item})}>
+                                    <Button size="xs" onClick={() => insertComponent(item)}>
                                         Use
                                     </Button>
                                 </> : null}
                                 {title === "utils" ? <>
-                                    <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => functionEditor?.current?.open(item)}>
+                                    <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => functionEditor?.current?.open(item, searchParams.get('app'))}>
                                         Edit
                                     </Button>
                                 </> : null}
                             </GridItem>
                         </Grid>
-                            
+                        <HStack spacing='-10px'>
+                            {mates[title] && mates[title][item] && mates[title][item].map(i => {
+                                const colors = ['pink', 'yellow', 'red', 'cyan', 'white', 'black']
+                                const r = colors[Math.floor(Math.random() * colors.length)]
+                                return (
+                                    <Circle size="20px" bg={r}>{i.toString().substr(-1)}</Circle>
+                                )
+                            })}
+                        </HStack>
                     </Button>
                 )}
             </AccordionPanel>
@@ -335,6 +504,97 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
                             <Text color="cyan.300" fontWeight="normal" >Package</Text>
                         </GridItem>
                         <GridItem w='100%' >
+                            <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => packageEditor?.current?.open(searchParams.get('app'))}>
+                                Edit
+                            </Button>
+                        </GridItem>
+                    </Grid>
+            </Button>
+
+            <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => utilsLib?.current?.open()}>
+                Utils Library
+            </Button>
+
+            <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => libManager?.current?.open(searchParams.get('app'))}>
+                Library Manager
+            </Button>
+            <NewFileModal ref={newModal} />
+      </Box>
+    )
+}
+
+
+//token for testing: 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
+const SidebarContentRight = ({ onClose, editor, ...rest }) => {
+
+    const [isConnected, setConnected] = useState(false)
+    const [octokit, setOctoKit] = useState(null)
+
+    useEffect(() => {
+        getRepos()
+    }, [isConnected])
+
+    const handleAuth = (event) => {
+        console.log(event)
+        if (event.key === 'Enter') {
+            const q = event.target.value
+            let o = new Octokit({ auth: q })
+            setOctoKit(o)
+            setConnected(true)
+            getRepos(o)
+        }
+    }
+
+    const getRepos = async(o) => {
+        const {
+            data: { login },
+        } = await octokit.rest.users.getAuthenticated();
+        console.log("Hello, %s", login);
+
+        const { data } = await octokit.rest.repos.listForUser({username: login})
+        console.log(data)
+    }
+
+    return (
+      <Box
+        bg={SEMI_BACK}
+        borderRight="1px"
+        w="full"
+        h="full"
+        {...rest}>
+            <Text color={'#f2f2f2'} ml={5} pt={10}>Github</Text>
+
+            {!isConnected ? <Input 
+                variant="outline"
+                colorScheme="cyan"
+                color="whiteAlpha.800"
+                placeholder="Access Token"
+                m="2"
+                width="90%"
+                fontSize="md"
+                onKeyDown={handleAuth}
+            />
+            : 
+            <>
+            <Text color="whiteAlpha.500">Connect to a Repository</Text>
+            <Button onClick={getRepos}>List</Button>
+            </>
+            }
+
+            {/* <Accordion defaultIndex={[0]} borderWidth={0} allowMultiple>
+                
+                {Object.keys(dirs).map((item, index) => <Item title={item} i={index} key={index} />)}
+
+            </Accordion>
+
+            <Button textAlign='left' ml={5} mb={2} variant="ghost" _hover={{
+                        bg: 'rgba(255,255,255,0.1)'
+                }}>
+                    <Grid templateColumns='repeat(2, 1fr)' gap={2}>
+                        <GridItem w='100%'>
+                            <Text color="cyan.300" fontWeight="normal" >Package</Text>
+                        </GridItem>
+                        <GridItem w='100%' >
                             <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => packageEditor?.current?.open()}>
                                 Edit
                             </Button>
@@ -345,167 +605,90 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => utilsLib?.current?.open()}>
                 Utils Library
             </Button>
+
+            <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => libManager?.current?.open()}>
+                Library Manager
+            </Button> */}
+
       </Box>
     )
 }
 
-const ComponentEditor = forwardRef(({ name }, ref) => {
+const NewFileModal = forwardRef((props, ref) => {
     
     const { isOpen, onOpen, onClose } = useDisclosure()
-    const [data, setData] = useState({})
-    const [props, setProps] = useState([
-        { name: 'title', type: 'text' }
-    ])
+    const toast = useToast()
+    const [name, setName] = useState('')
+    const [fileType, setType] = useState('src')
+    const [searchParams, setSearchParams] = useSearchParams()
 
     useImperativeHandle(ref, () => ({
-        open(name) {
-            setData({
-                name: name,
-                code: `const { isOpen, onOpen, onClose } = useDisclosure()
-                return (
-                    <>
-                    <Button onClick={onOpen}>Open Modal</Button>
-
-                    <Modal closeOnOverlayClick={false} isOpen={isOpen} onClose={onClose}>
-                        <ModalOverlay />
-                        <ModalContent>
-                        <ModalHeader>Create your account</ModalHeader>
-                        <ModalCloseButton />
-                        <ModalBody pb={6}>
-                            <Lorem count={2} />
-                        </ModalBody>
-
-                        <ModalFooter>
-                            <Button colorScheme='blue' mr={3}>
-                            Save
-                            </Button>
-                            <Button onClick={onClose}>Cancel</Button>
-                        </ModalFooter>
-                        </ModalContent>
-                    </Modal>
-                    </>
-                )`
-            })
-
-            setProps([])
-
-            
+        open(type) {
+            setType(type)
             onOpen()
-
         }
     }))
 
-    const showProps = () => {
-        let txt = ``
+    const handleFileCreation = () => {
+        if(name.endsWith('.js') || name.endsWith('.jsx') || name.endsWith('.tsx') || name.endsWith('.ts')) {
+            fetch(`http://localhost:5000/newFile?path=${searchParams.get('app')}/${fileType}/${name}`)
+                .then(response => response.json())
+                .then(responseJson => {
+                    if(responseJson.res !== 'success') {
+                        toast({
+                            title: responseJson.res,
+                            status: 'error',
+                            duration: 2000,
+                            isClosable: true,
+                        })
+                    } else {
 
-        props.forEach(el => {
-            if(!el?.name) return
-            let type = `""`
-            switch (el?.type) {
-                case "Number":
-                    type = `{0}`
-                    break;
-                case "Boolean":
-                    type = `{true}`
-                    break
-                case "Others":
-                    type = `{}`
-                    break
-                default:
-                    break;
-            }
-            txt += `${el.name}=${type} ` 
-        })
-
-        return txt
-    }
-
-    const setPropValue = (val, idx, param) => {
-        let prev = [...props]
-        prev[idx][param] = val.target.value
-        setProps(prev)
+                        if(fileType === 'src') {
+                            searchParams.set('file', fileType + '/' + name)
+                            setSearchParams(searchParams)
+                            onClose()
+                        } else if(fileType === 'utils') {
+                            const content = `export * from './${name}';`
+                            fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/utils/index.js&content=${content}&type=append`)
+                            .then(response => response.json())
+                            .then(responseJson => {
+                                onClose()
+                            })
+                        } else {
+                            onClose()
+                        }
+                        
+                    }
+                })
+        } else {
+            toast({
+                title: 'It should be a JS or TS file!',
+                status: 'error',
+                duration: 2000,
+                isClosable: true,
+            })
+        }
     }
 
     return (
-        <Modal closeOnOverlayClick={false} isOpen={isOpen} onClose={onClose} size="5xl">
+        <Modal closeOnOverlayClick={false} isOpen={isOpen} onClose={onClose}>
             <ModalOverlay bg='blackAlpha.300' backdropFilter='blur(10px) hue-rotate(90deg)' />
-            <ModalContent bg="blackAlpha.500" height="80%">
-            <ModalHeader color="cyan.300">{data?.name}</ModalHeader>
+            <ModalContent bg="blackAlpha.500">
+            <ModalHeader color="cyan.300">New {fileType}/{name}</ModalHeader>
             <ModalCloseButton color="#ababab" />
             <ModalBody pb={6} pt={6} height="100%" width="100%" borderRadius={10} overflow="hidden">
-                <Tabs height="100%" width="100%" variant='soft-rounded' colorScheme='cyan'>
-                    <TabList borderBottomColor="blackAlpha.400">
-                        <Tab>Code</Tab>
-                        <Tab>Config</Tab>
-                    </TabList>
-
-                    <TabPanels height="100%" width="100%">
-                        <TabPanel height="100%" width="100%">
-                            <CodeEditor
-                                height="100%"
-                                width="100%"
-                                defaultLanguage="javascript"
-                                defaultValue={data?.code}
-                                theme="vs-dark"
-                            />
-                        </TabPanel>
-                        <TabPanel height="100%" width="100%" overflow="auto">
-                        <Card bg="blackAlpha.400" borderRadius={10}>
-                            <CardBody>
-                                <Text color="whiteAlpha.600">
-                                    {`<${data?.name} ${props?.length > 0 ? showProps() : null} />`}
-                                </Text>
-                            </CardBody>
-                        </Card>
-                            {props?.length > 0 && props?.map((item, idx) => (
-                                <Grid templateColumns='repeat(2, 1fr)' gap={5} mt={5} key={item?.name}>
-                                        <GridItem>
-                                            <label for={item?.name + '-value'} style={{color: '#ababab'}}>{idx + 1}. Prop Value</label>
-                                            <Input 
-                                                id={item?.name + '-value'} 
-                                                placeholder="Value" 
-                                                defaultValue={item?.name} 
-                                                color="whiteAlpha.600" 
-                                                colorScheme="cyan"
-                                                mt={2}
-                                                onChange={e => setPropValue(e, idx, 'name')} />
-                                        </GridItem>
-                                       <GridItem>
-                                            <label for={item?.name + '-type'} style={{color: '#ababab'}}>Prop Type</label>
-                                            <Select 
-                                                id={item?.name + '-type'} 
-                                                colorScheme="cyan" 
-                                                color="whiteAlpha.600" 
-                                                mt={2} 
-                                                defaultValue={item?.type}
-                                                onChange={e => setPropValue(e, idx, 'type')}>
-                                                <option style={{background: SEMI_BACK}}>Text</option>
-                                                <option style={{background: SEMI_BACK}}>Number</option>
-                                                <option style={{background: SEMI_BACK}}>Boolean</option>
-                                                <option style={{background: SEMI_BACK}}>Others</option>
-                                            </Select>
-                                       </GridItem>  
-                                    </Grid>
-                            ))}
-                            
-                            <Button 
-                                colorScheme="cyan" 
-                                variant="outline"
-                                alignSelf="flex-end" 
-                                mt={10}
-                                mb={10}
-                                onClick={() => props.length > 0 ? 
-                                    setProps(prev => [...prev, {name: '', type: 'Text'}])
-                                : setProps([{name: '', type: 'Text'}])}>
-                                    Add Prop
-                            </Button>
-                        </TabPanel>
-                    </TabPanels>
-                </Tabs>
+                <Input 
+                    placeholder="Name" 
+                    variant="filled" 
+                    colorScheme="blackAlpha" 
+                    color="whiteAlpha.800"
+                    bg="whiteAlpha.100" 
+                    _hover={{bg: 'whiteAlpha.100'}}
+                    onChange={e => setName(e.target.value)} />
             </ModalBody>
 
             <ModalFooter>
-                <Button colorScheme='cyan' mr={3}>
+                <Button colorScheme='cyan' mr={3} onClick={handleFileCreation}>
                     Save
                 </Button>
                 <Button onClick={onClose}>Cancel</Button>
@@ -515,26 +698,51 @@ const ComponentEditor = forwardRef(({ name }, ref) => {
     )
 })
 
-const FunctionsEditor = forwardRef(({ name }, ref) => {
+const FunctionsEditor = forwardRef((prop, ref) => {
     
     const { isOpen, onOpen, onClose } = useDisclosure()
+    const toast = useToast()
+    const [app, setApp] = useState('')
     const [data, setData] = useState({})
 
     useImperativeHandle(ref, () => ({
-        open(name) {
-            setData({
-                name: name,
-                code: `
-                    export function ${name} (a, b) {
-                        return a + b
-                    }
-                `
+        open(name, id) {
+            setApp(id)
+            setData({})
+            fetch(`http://localhost:5000/readFile?path=${id}/utils/${name}`)
+            .then(response => response.text())
+            .then(responseText => {
+                const code = responseText
+                if(!code) {
+                    setData({
+                        name: name,
+                        code: `export function ${name.substring(0, name.lastIndexOf('.'))} () {
+                                
+}`
+                    })
+                } else {
+                    setData({name, code})
+                }
+                onOpen()
             })
-            
-            onOpen()
 
         }
     }))
+
+    const handleSave = () => {
+        fetch(`http://localhost:5000/writeFile?path=${app}/utils/${data?.name}&content=${encodeURIComponent(data?.code)}`)
+            .then(response => response.json())
+            .then(responseJson => {
+                //console.log(responseJson)
+                toast({
+                    title: 'Saved Successfully',
+                    status: 'success',
+                    duration: 2000,
+                    isClosable: true,
+                })
+                onClose()
+            })
+    }
 
 
     return (
@@ -577,11 +785,16 @@ const FunctionsEditor = forwardRef(({ name }, ref) => {
                     defaultLanguage="javascript"
                     defaultValue={data?.code}
                     theme="vs-dark"
+                    onChange={e => {
+                        let prev = {...data}
+                        prev.code = e
+                        setData(prev)
+                    }}
                 />
             </ModalBody>
 
             <ModalFooter>
-                <Button colorScheme='cyan' mr={3}>
+                <Button colorScheme='cyan' mr={3} onClick={handleSave}>
                     Save
                 </Button>
                 <Button onClick={onClose}>Cancel</Button>
@@ -594,60 +807,23 @@ const FunctionsEditor = forwardRef(({ name }, ref) => {
 const PackageEditor = forwardRef((props, ref) => {
     
     const { isOpen, onOpen, onClose } = useDisclosure()
+    const toast = useToast()
+    const [app, setApp] = useState('')
     const [data, setData] = useState({})
     const [newType, setNewType] = useState('')
 
     useImperativeHandle(ref, () => ({
-        open(name) {
-            setData(JSON.parse(`{
-                "name": "reax",
-                "version": "0.1.0",
-                "private": true,
-                "dependencies": {
-                  "@chakra-ui/react": "^2.4.4",
-                  "@emotion/react": "^11.10.5",
-                  "@emotion/styled": "^11.10.5",
-                  "@fontsource/chivo-mono": "^4.5.0",
-                  "@monaco-editor/react": "^4.4.6",
-                  "@testing-library/jest-dom": "^5.16.5",
-                  "@testing-library/react": "^13.4.0",
-                  "@testing-library/user-event": "^13.5.0",
-                  "framer-motion": "^7.10.2",
-                  "react": "^18.2.0",
-                  "react-dom": "^18.2.0",
-                  "react-icons": "^4.7.1",
-                  "react-scripts": "5.0.1",
-                  "web-vitals": "^2.1.4"
-                },
-                "scripts": {
-                  "start": "react-scripts start",
-                  "build": "react-scripts build",
-                  "test": "react-scripts test",
-                  "eject": "react-scripts eject"
-                },
-                "eslintConfig": {
-                  "extends": [
-                    "react-app",
-                    "react-app/jest"
-                  ]
-                },
-                "browserslist": {
-                  "production": [
-                    ">0.2%",
-                    "not dead",
-                    "not op_mini all"
-                  ],
-                  "development": [
-                    "last 1 chrome version",
-                    "last 1 firefox version",
-                    "last 1 safari version"
-                  ]
-                }
-              }
-              `))
-            
-            onOpen()
-
+        open(id) {
+            setData({})
+            setNewType('')
+            setApp(id)
+            fetch(`http://localhost:5000/readFile?path=${id}/package.json`)
+            .then(response => response.text())
+            .then(responseText => {
+                const code = JSON.parse(responseText)
+                setData(code)
+                onOpen()
+            })
         }
     }))
 
@@ -661,6 +837,21 @@ const PackageEditor = forwardRef((props, ref) => {
             delete prev[val]
             setData(prev)
         }
+    }
+
+    const handleSave = () => {
+        fetch(`http://localhost:5000/writeFile?path=${app}/package.json&content=${encodeURIComponent(JSON.stringify(data))}`)
+            .then(response => response.json())
+            .then(responseJson => {
+                //console.log(responseJson)
+                toast({
+                    title: 'Saved Successfully',
+                    status: 'success',
+                    duration: 2000,
+                    isClosable: true,
+                })
+                onClose()
+            })
     }
 
     return (
@@ -774,7 +965,7 @@ const PackageEditor = forwardRef((props, ref) => {
             </ModalBody>
 
             <ModalFooter>
-                <Button colorScheme='cyan' mr={3}>
+                <Button colorScheme='cyan' mr={3} onClick={handleSave}>
                     Save
                 </Button>
                 <Button onClick={onClose}>Cancel</Button>

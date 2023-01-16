@@ -1,0 +1,9 @@
+{
+	"name": "AXMYT - A simple react app on Reax",
+	"shortName": "AXMYT",
+	"description": "Demo app created with Reax",
+	"lang": "en",
+	"themeColor": "black",
+	"backgroundColor": "white",
+	"icon": "https://raw.githubusercontent.com/MadCoderme/reax-test/main/public/icon.webp"
+}

@@ -84,8 +84,8 @@ const ComponentEditor = forwardRef((prop, ref) => {
     const handleMount = (e) => {
         setEditor(e)
         const id = searchParams.get('app')
-        const file = 'components/' + name
-        const fileConfig = 'components/config_' + name.substring(0, name.lastIndexOf('.')) + '.json'
+        const file = 'src/components/' + name
+        const fileConfig = 'src/components/config_' + name.substring(0, name.lastIndexOf('.')) + '.json'
 
         fetch(`http://localhost:5000/readFile?path=${id}/${file}`)
             .then(response => response.text())
@@ -102,8 +102,8 @@ const ComponentEditor = forwardRef((prop, ref) => {
     const handleSave = () => {
         if(editor) {
             const id = searchParams.get('app')
-            const file = 'components/' + name
-            const fileConfig = 'components/config_' + name.substring(0, name.lastIndexOf('.')) + '.json'
+            const file = 'src/components/' + name
+            const fileConfig = 'src/components/config_' + name.substring(0, name.lastIndexOf('.')) + '.json'
             const content = encodeURIComponent(editor.getValue())
 
             let configCode = props.find(el => el?.code != null)
@@ -168,7 +168,7 @@ const ComponentEditor = forwardRef((prop, ref) => {
     return (
         <Modal closeOnOverlayClick={false} isOpen={isOpen} onClose={onClose} size="5xl">
             <ModalOverlay bg='blackAlpha.300' backdropFilter='blur(10px) hue-rotate(90deg)' />
-            <ModalContent bg="blackAlpha.500" height="80%">
+            <ModalContent bg="blackAlpha.700" height="80%">
             <ModalHeader color="cyan.300">{name}</ModalHeader>
             <ModalCloseButton color="#ababab" />
             <ModalBody pb={6} pt={6} height="100%" width="100%" borderRadius={10} overflow="hidden">

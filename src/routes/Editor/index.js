@@ -35,16 +35,18 @@ import {
   HStack,
 
 } from '@chakra-ui/react';
-import { VscEdit, VscNewFile, VscTrash } from "react-icons/vsc"
+import { VscCircleFilled, VscEdit, VscNewFile, VscTrash } from "react-icons/vsc"
 import CodeEditor from "@monaco-editor/react"
 import io from "socket.io-client"
 import { Octokit, App } from "octokit"
+import { Hook, Console, Decode, Unhook } from 'console-feed'
 
 import { SEMI_BACK } from "../../utils/colors";
 import ComponentEditor from './components/ComponentEditor'
 import Menu from "./components/Menu";
 import { useSearchParams } from "react-router-dom";
 import LibraryManager from "./components/LibraryManager";
+import ConfigureAppearance from "./components/ConfigureAppearance";
 
 const socket = io("ws://localhost:3001");
 var inter = null
@@ -54,12 +56,18 @@ export default function Editor(params) {
 
     const [code, setCode] = useState(``);
     const [editor, setEditor] = useState(null)
+    const [isUnsaved, setUnsaved] = useState(false)
     const [searchParams, setSearchParams] = useSearchParams()
+    const [isLeftVisible, setLeftVisible] = useState(true)
+    const [isRightVisible, setRightVisible] = useState(true)
+    const [isPreviewVisible, setPreviewVisible] = useState(true)
     const componentEditor = useRef()
     const functionEditor = useRef()
     const packageEditor = useRef()
     const utilsLib = useRef()
     const libManager = useRef()
+    const appearanceConfigure = useRef()
+    const sidebarRight = useRef()
     const toast = useToast()
 
     useEffect(() => {
@@ -83,11 +91,11 @@ export default function Editor(params) {
             })
     }, [searchParams])
 
+
     useEffect(() => {
         socket.on('connect', () => {
             //alert('connected to socket io')
         });     
-
         return () => {
             socket.off('connect');
             socket.off('disconnect');
@@ -95,6 +103,11 @@ export default function Editor(params) {
             //clearInterval(inter)
         };
     }, [])
+
+    useEffect(() => {
+        if(isPreviewVisible) 
+            dragElement(document.getElementById('resizer-block'))
+    }, [isPreviewVisible])
 
     const editorOnMount = (e, m) => {
         var shouldSend = true
@@ -118,6 +131,7 @@ export default function Editor(params) {
         })
 
         e.onKeyDown(ev => {
+            setUnsaved(true)
             if(ev.browserEvent.ctrlKey  && ev.browserEvent.code === "KeyS") {
                 ev.preventDefault()
                 const params = new URLSearchParams(window.location.search);
@@ -134,6 +148,12 @@ export default function Editor(params) {
                             duration: 2000,
                             isClosable: true,
                         })
+                        setUnsaved(false)
+                        fetch(`http://localhost:5000/addFileForGithub?app=${app}&path=${app}/${file}`)
+                            .then(response => response.json())
+                            .then(responseJson => {
+                                //console.log(responseJson)
+                            })
                     })
             }
         })
@@ -232,10 +252,64 @@ export default function Editor(params) {
         }, 2000);
     }
 
+    function handleViewToggle(type) {
+        switch (type) {
+            case 'left':
+                setLeftVisible(prev => !prev)
+                break;
+            case 'right':
+                setRightVisible(prev => !prev)
+                break;
+            case 'preview':
+                document.getElementById('editor-panel').style.height = isPreviewVisible ? '100%' : '80%'
+                setPreviewVisible(prev => !prev)
+                break;
+            case 'console':
+                sidebarRight?.current?.toggleConsole()
+                break;
+            case 'git':
+                sidebarRight?.current?.toggleGithub()
+                break;
+            default:
+                break;
+        }
+    }
+
+    function dragElement(elmnt) {
+        var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        elmnt.onmousedown = (e) => {
+          e = e || window.event;
+          e.preventDefault();
+          // get the mouse cursor position at startup:
+          pos3 = e.clientX;
+          pos4 = e.clientY;
+          document.onmouseup = closeDragElement;
+          // call a function whenever the cursor moves:
+          document.onmousemove = elementDrag;
+        }
+      
+        function elementDrag(e) {
+          e = e || window.event;
+          e.preventDefault();
+          pos2 = pos4 - e.clientY;
+          pos3 = e.clientX;
+          pos4 = e.clientY;
+          document.getElementById('editor-panel').style.height = pos4 + 'px'
+          document.getElementById('preview-panel').style.height = (window.innerHeight - pos4) + 'px'
+        }
+      
+        function closeDragElement() {
+          /* stop moving when mouse button is released:*/
+          document.onmouseup = null;
+          document.onmousemove = null;
+        }
+    }
+
     return (
         <Box minH="100%">
-            <Menu  app={searchParams.get('app')} />
+            <Menu editor={editor} app={searchParams.get('app')} onToggleView={handleViewToggle} />
             <Grid templateColumns='repeat(6, 1fr)' gap={0} height="95%">
+                {isLeftVisible ? 
                 <GridItem colSpan={1} h='100%'>
                     <SidebarContent
                         display={{ base: 'none', md: 'block' }}
@@ -245,26 +319,47 @@ export default function Editor(params) {
                         packageEditor={packageEditor}
                         utilsLib={utilsLib}
                         libManager={libManager}
-                    />
-                </GridItem>
-                <GridItem colSpan={4} h='100%' bg="blackAlpha.500">
-                    <Box height="3%" background="#2b2d2f" pl={5} pr={5} alignItems="center">
-                        <Text color="whiteAlpha.500" fontSize={14}>{searchParams.get('file')}</Text>
+                        appearanceConfigure={appearanceConfigure}
+                    /> 
+                </GridItem>: null}
+                <GridItem colSpan={!isLeftVisible && !isRightVisible ? 6 :
+                    !isLeftVisible || !isRightVisible ? 5 : 4} h='100%' bg="blackAlpha.500">
+
+                    <Box  background="#2b2d2f" pl={5} pr={5} alignItems="center" >
+                        <Text color="whiteAlpha.500" fontSize={14} display="flex" flexDirection="row">
+                            {searchParams.get('file')} 
+                            {isUnsaved ? <VscCircleFilled display="inline-block" style={{marginTop: 5, marginLeft: 5}} /> : null}
+                        </Text>
                     </Box>
                     <div style={{height: '97%'}}>
-                        <CodeEditor
-                            height="100%"
-                            width="100%"
-                            defaultLanguage="javascript"
-                            defaultValue={code}
-                            theme="vs-dark"
-                            onMount={editorOnMount}
-                            onChange={v => setCode(v)}
-                        />
+                        <div id="editor-panel" style={{ height: '80%' }}>
+                            <CodeEditor
+                                height="100%"
+                                width="100%"
+                                defaultLanguage="javascript"
+                                defaultValue={code}
+                                theme="vs-dark"
+                                onMount={editorOnMount}
+                                onChange={v => {
+                                    setCode(v)
+                                }}
+                            />
+                        </div>
+                        {isPreviewVisible ? <Box id="preview-panel" height="20%" width="100%" bg="white">
+                            <div style={{
+                                width: '100%',
+                                background: '#2b2d2f',
+                                cursor: 'row-resize'
+                            }} id="resizer-block">
+                                <Text color="whiteAlpha.500" fontSize={14} ml={5}>Preview</Text>
+                            </div>
+                            <iframe id="preview-iframe" src={"http://localhost:3000/apps/" + searchParams.get('app')} loading="lazy" />
+                        </Box> : null}
                     </div>
                 </GridItem>
                 <GridItem colSpan={1} h='100%'>
                     <SidebarContentRight
+                        ref={sidebarRight}
                         display={{ base: 'none', md: 'block' }}
                     />
                 </GridItem>
@@ -275,6 +370,7 @@ export default function Editor(params) {
             <PackageEditor ref={packageEditor} />
             <UtilsLibrary ref={utilsLib} />
             <LibraryManager ref={libManager} />
+            <ConfigureAppearance ref={appearanceConfigure} />
            
             {/* <Drawer
                 autoFocus={false}
@@ -298,7 +394,7 @@ const LinkItems = [
     { name: 'Text', code: '<Text title={""} />' }
 ];
 
-const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, packageEditor, utilsLib, libManager, ...rest }) => {
+const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, packageEditor, utilsLib, libManager, appearanceConfigure }) => {
 
     const [searchParams, setSearchParams] = useSearchParams()
     const newModal = useRef()
@@ -326,11 +422,11 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             .then(response => response.json())
             .then(responseJson => {
                 prev.src = responseJson
-                fetch(`http://localhost:5000/readFolder?path=${id}/components`)
+                fetch(`http://localhost:5000/readFolder?path=${id}/src/components`)
                 .then(response => response.json())
                 .then(responseJson => {
                     prev.components = responseJson.filter(el => !el.endsWith('.json'))
-                    fetch(`http://localhost:5000/readFolder?path=${id}/utils`)
+                    fetch(`http://localhost:5000/readFolder?path=${id}/src/utils`)
                     .then(response => response.json())
                     .then(responseJson => {
                         prev.utils = responseJson.filter(el => el !== 'index.js')
@@ -379,7 +475,7 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
         const id = searchParams.get('app')
         if(!id) return  
 
-        fetch(`http://localhost:5000/readFile?path=${id}/components/config_${item.substring(0, item.lastIndexOf('.'))}.json`)
+        fetch(`http://localhost:5000/readFile?path=${id}/src/components/config_${item.substring(0, item.lastIndexOf('.'))}.json`)
             .then(response => response.text())
             .then(responseText => {
                 let code = JSON.parse(responseText)?.find(el => el?.code != null)?.code
@@ -407,12 +503,12 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
                         endLineNumber: 1,
                         endColumn: 1,
                     },
-                    text: 'import ' + item.substring(0, item.lastIndexOf('.')) + ' from "../components/' + item + '" \n',
+                    text: 'import ' + item.substring(0, item.lastIndexOf('.')) + ' from "./components/' + item + '" \n',
                     forceMoveMarkers: true,
                 };
 
                 const value = editor.getValue()
-                const changes = value.includes('import ' + item.substring(0, item.lastIndexOf('.')) + ' from "../components/' + item + '" \n') ? [op] : [op, opi]
+                const changes = value.includes('import ' + item.substring(0, item.lastIndexOf('.')) + ' from "./components/' + item + '" \n') ? [op] : [op, opi]
 
                 editor.executeEdits('my-source', changes);
             })
@@ -486,8 +582,7 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
         bg={SEMI_BACK}
         borderRight="1px"
         w="full"
-        h="full"
-        {...rest}>
+        h="full">
             <Text color={'#f2f2f2'} ml={5} pt={10}>Workspace</Text>
 
             <Accordion defaultIndex={[0]} borderWidth={0} allowMultiple>
@@ -497,7 +592,7 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             </Accordion>
 
             <Button textAlign='left' ml={5} mb={2} variant="ghost" _hover={{
-                        bg: 'rgba(255,255,255,0.1)'
+                        bg: 'whiteAlpha.100'
                 }}>
                     <Grid templateColumns='repeat(2, 1fr)' gap={2}>
                         <GridItem w='100%'>
@@ -512,47 +607,341 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             </Button>
 
             <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => utilsLib?.current?.open()}>
-                Utils Library
+                <Text color="white" fontWeight="normal">Utils Library</Text>
             </Button>
 
             <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => libManager?.current?.open(searchParams.get('app'))}>
-                Library Manager
+                <Text color="white" fontWeight="normal">Library Manager</Text>
             </Button>
+
+            <Button variant="ghost" colorScheme="whiteAlpha" _hover={{ bg: 'whiteAlpha.100' }} mt={5} onClick={() => appearanceConfigure?.current?.open(searchParams.get('app'))}>
+                <Text color="white" fontWeight="normal">Configure Appearance</Text>
+            </Button>
+
             <NewFileModal ref={newModal} />
       </Box>
     )
 }
 
 
-//token for testing: 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
-const SidebarContentRight = ({ onClose, editor, ...rest }) => {
+const token = `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`
+const octokit = new Octokit({ auth: token })
 
-    const [isConnected, setConnected] = useState(false)
-    const [octokit, setOctoKit] = useState(null)
+const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
+
+    const [searchParams, setSearchParams] = useSearchParams()
+    const toast = useToast()
+    const [login, setLogin] = useState(null)
+    const [enableConsole, setEnableConsole] = useState(true)
+    const [enableGit, setEnableGit] = useState(true)
+    const [projectInfo, setProjectInfo] = useState({})
+    const [logs, setLogs] = useState([])
+    const [repos, setRepos] = useState([])
+
+    useImperativeHandle(ref, () => ({
+        toggleConsole() {
+            setEnableConsole(prev => !prev)
+        },
+        toggleGithub() {
+            setEnableGit(prev => !prev)
+        }
+    }))
+    
+    useEffect(() => {
+        getProjectInfo()
+    }, [])
 
     useEffect(() => {
-        getRepos()
-    }, [isConnected])
+        const iframe = document.getElementById('preview-iframe').contentWindow
+        iframe.addEventListener('error', (message) => {
+            iframe.console.error(message.error.stack)
+        })
 
-    const handleAuth = (event) => {
-        console.log(event)
-        if (event.key === 'Enter') {
-            const q = event.target.value
-            let o = new Octokit({ auth: q })
-            setOctoKit(o)
-            setConnected(true)
-            getRepos(o)
-        }
-    }
+        const hookedConsole = Hook(
+            iframe.console,
+            (log) => {
+                if(!log.data[0].toString().startsWith('No routes matched location "/apps/')) {
+                    setLogs((currLogs) => [...currLogs, log])
+                }
+            },
+            false
+        )
+        return () => Unhook(hookedConsole)
+    }, [])
 
-    const getRepos = async(o) => {
+    const getProjectInfo = async() => {
         const {
             data: { login },
         } = await octokit.rest.users.getAuthenticated();
-        console.log("Hello, %s", login);
 
+        setLogin(login)
+
+        const id = searchParams.get('app')
+        fetch(`http://localhost:5000/readFile?path=${id}/git.json`)
+            .then(response => response.text())
+            .then(async(responseText) => {
+                const code = JSON.parse(responseText)
+                setProjectInfo(code)
+                if(!code?.repo) {
+                    getRepos()
+                } else {
+                    if(code?.treeHash) {
+                        const tree = await octokit.rest.git.getTree({
+                            owner: login,
+                            repo: code?.repo,
+                            tree_sha: code?.treeHash
+                        })
+                        console.log(tree)
+                    } else {
+                        try {
+                            const commits = await octokit.rest.repos.listCommits({
+                                owner: login,
+                                repo: code?.repo,
+                            })
+                            const commitSHA = commits.data[0].sha
+                            let prev = {...code}
+                            prev.commitSHA = commitSHA
+                            setProjectInfo(prev)
+                            if(!code?.isSetup) {
+                                fetch(`http://localhost:5000/addDirForGithub?app=${id}`)
+                                    .then(response => response.json())
+                                    .then(async(responseJson) => {
+                                        //nothing
+                                    })
+                            }
+                        } catch (e) {
+                            console.log(e)
+                            
+                        }
+                    }
+                    
+                }
+            })
+    }
+
+
+    // const handleAuth = (event) => {
+    //     console.log(event)
+    //     if (event.key === 'Enter') {
+    //         const q = event.target.value
+    //         let o = new Octokit({ auth: q })
+    //         setOctoKit(o)
+    //         setConnected(true)
+    //         getRepos(o)
+    //     }
+    // }
+
+    const getRepos = async() => {
         const { data } = await octokit.rest.repos.listForUser({username: login})
-        console.log(data)
+        setRepos(data)
+    }
+
+    const handleConnection = async(repository) => {
+        let prev = {...projectInfo}
+        prev.repo = repository.name 
+
+        fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+            .then(response => response.json())
+            .then(responseJson => {
+                setProjectInfo(prev)
+            })
+    }
+
+    const handleCommit = () => {
+        fetch(`http://localhost:5000/readFiles?files=${JSON.stringify(projectInfo?.treeFiles.filter(el => !el.endsWith('/git.json')), null, '\t')}&root=${'src/apps/' + searchParams.get('app') + '/'}`)
+            .then(response => response.json())
+            .then(async(responseJson) => {
+                const {
+                    data: { sha: currentTreeSHA },
+                } = await octokit.rest.git.createTree({
+                    owner: login,
+                    repo: projectInfo?.repo,
+                    tree: responseJson,
+                    base_tree: projectInfo?.commitSHA,
+                    parents: [projectInfo?.commitSHA]
+                })
+                
+                const {
+                    data: { sha: newCommitSHA },
+                } = await octokit.rest.git.createCommit({
+                    owner: login,
+                    repo: projectInfo?.repo,
+                    tree: currentTreeSHA,
+                    message: `Update from Reax`,
+                    parents: [projectInfo?.commitSHA],
+                })
+
+                let prev = {...projectInfo}
+                prev.newCommitSHA = newCommitSHA
+
+                fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                .then(response => response.json())
+                .then(responseJson => {
+                    setProjectInfo(prev)
+                    toast({
+                        title: 'Successfully Created New Commit',
+                        status: 'success',
+                        duration: 2000,
+                        isClosable: true,
+                    })
+                })
+
+            })
+    }
+
+    const updateAppearance = () => {
+        return new Promise((resolve, reject) => {
+            const id = searchParams.get('app')
+            fetch(`http://localhost:5000/createPublicFolder?app=${id}`)
+                .then(response => response.json())
+                .then((responseJson) => {
+                    if(responseJson.res === 'success') {
+                        fetch(`http://localhost:5000/glob?path=${id}/public`)
+                        .then(response => response.json())
+                        .then((responseJson) => {
+                            const paths = [...responseJson, 'src/apps/' + id + '/appearance.json']
+                            fetch(`http://localhost:5000/readFiles?files=${JSON.stringify(paths)}&root=${'src/apps/' + searchParams.get('app') + '/'}`)
+                            .then(response => response.json())
+                            .then(async(responseJson) => {
+                                let iconFile = responseJson.find(el => el.path.includes('public/icon.'))
+                                if(iconFile) {
+                                    const blobData = await octokit.rest.git.createBlob({
+                                        owner: login,
+                                        repo: projectInfo?.repo,
+                                        content: iconFile.content,
+                                        encoding: 'base64',
+                                    })
+                                    delete responseJson[responseJson.indexOf(iconFile)].content
+                                    responseJson[responseJson.indexOf(iconFile)].sha = blobData.data.sha
+                                    responseJson[responseJson.indexOf(iconFile)].type = 'blob'
+                                }
+                                
+                                console.log(responseJson)
+                                const {
+                                    data: { sha: currentTreeSHA },
+                                } = await octokit.rest.git.createTree({
+                                    owner: login,
+                                    repo: projectInfo?.repo,
+                                    tree: responseJson,
+                                    base_tree: projectInfo?.commitSHA,
+                                    parents: [projectInfo?.commitSHA]
+                                })
+                                
+                                const {
+                                    data: { sha: newCommitSHA },
+                                } = await octokit.rest.git.createCommit({
+                                    owner: login,
+                                    repo: projectInfo?.repo,
+                                    tree: currentTreeSHA,
+                                    message: `Update Public Folder`,
+                                    parents: [projectInfo?.commitSHA],
+                                })
+
+                                await octokit.rest.git.updateRef({
+                                    owner: login,
+                                    repo: projectInfo?.repo,
+                                    sha: newCommitSHA,
+                                    ref: "heads/main", 
+                                    force: true
+                                })
+
+                                let prev = {...projectInfo}
+                                prev.treeFiles = []
+                                prev.commitSHA = newCommitSHA
+                                prev.newCommitSHA = ""
+
+                                fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                                .then(response => response.json())
+                                .then(responseJson => {
+                                    setProjectInfo(prev)
+                                    toast({
+                                        title: 'Successfully Pushed Public Folder',
+                                        status: 'success',
+                                        duration: 2000,
+                                        isClosable: true,
+                                    })
+    
+                                    let iconExists = paths.find(el => el.includes('public/icon.'))
+                                    if(iconExists) {
+                                        octokit.rest.repos.getContent({
+                                            owner: login,
+                                            repo: projectInfo?.repo,
+                                            path: iconExists.replace('src/apps/' + id + '/', '')
+                                        })
+                                        .then(data => {
+                                            fetch(`http://localhost:5000/cleanPublicFolder?app=${id}&icon=${data.data.download_url}`)
+                                            .then(response => response.json())
+                                            .then((responseJson) => {
+                                                resolve()
+                                            })
+                                        })
+                                    } else {
+                                        fetch(`http://localhost:5000/cleanPublicFolder?app=${id}`)
+                                        .then(response => response.json())
+                                        .then((responseJson) => {
+                                            resolve()
+                                        })
+                                    }
+                                })
+                            })
+                        })
+                    }
+                })
+        })
+    }
+
+    const handlePush = async() => {
+        pushLatestCommit()
+            .then(() => {
+                octokit.rest.repos.getContent({
+                    owner: login,
+                    repo: projectInfo?.repo,
+                    path: 'appearance.json'
+                }).then(res => {
+                    let remoteAppearance = atob(res.data.content)
+                    fetch(`http://localhost:5000/readFile?path=${searchParams.get('app')}/appearance.json`)
+                    .then(response => response.text())
+                    .then((responseText) => {
+                        if(remoteAppearance !== responseText) {
+                            updateAppearance()
+                        } 
+                    })
+                })
+                .catch(e => {
+                    if(e.status === 404) {
+                        updateAppearance()
+                    }
+                })
+            })
+    }
+
+    const pushLatestCommit = () => {
+        return new Promise(async(resolve) => {
+            await octokit.rest.git.updateRef({
+                owner: login,
+                repo: projectInfo?.repo,
+                sha: projectInfo?.newCommitSHA,
+                ref: "heads/main",
+            })
+    
+            let prev = {...projectInfo}
+            prev.treeFiles = []
+            prev.commitSHA = projectInfo?.newCommitSHA
+            prev.newCommitSHA = ""
+    
+            fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                .then(response => response.json())
+                .then(responseJson => {
+                    setProjectInfo(prev)
+                    toast({
+                        title: 'Successfully Pushed',
+                        status: 'success',
+                        duration: 2000,
+                        isClosable: true,
+                    })
+                    resolve()
+                })
+        })
     }
 
     return (
@@ -562,24 +951,46 @@ const SidebarContentRight = ({ onClose, editor, ...rest }) => {
         w="full"
         h="full"
         {...rest}>
-            <Text color={'#f2f2f2'} ml={5} pt={10}>Github</Text>
-
-            {!isConnected ? <Input 
-                variant="outline"
-                colorScheme="cyan"
-                color="whiteAlpha.800"
-                placeholder="Access Token"
-                m="2"
-                width="90%"
-                fontSize="md"
-                onKeyDown={handleAuth}
-            />
-            : 
+            {enableGit ? 
             <>
-            <Text color="whiteAlpha.500">Connect to a Repository</Text>
-            <Button onClick={getRepos}>List</Button>
-            </>
-            }
+            <Text color={'#f2f2f2'} ml={5} pt={10} mb={2}>Github</Text>
+            <Box height="30vh" overflow="auto" ml={2}>
+                {projectInfo?.repo ? 
+                <>
+                    <Box ml={2}>
+                        {projectInfo?.treeFiles.length > 0 ? <Button variant="outline" colorScheme="cyan" size="sm" mr={2} mb={2} p={2}
+                            _hover={{ bg: 'whiteAlpha.50' }} _active={{ bg: 'whiteAlpha.100' }}
+                            onClick={handleCommit}>
+                            Commit
+                        </Button> : null}
+                        {projectInfo?.newCommitSHA ? <Button variant="outline" colorScheme="cyan" size="sm" mb={2} p={2}
+                            _hover={{ bg: 'whiteAlpha.50' }} _active={{ bg: 'whiteAlpha.100' }} onClick={handlePush}>
+                            Push
+                        </Button> : null}
+                        {projectInfo?.treeFiles.length === 0 && projectInfo?.newCommitSHA === "" ? 
+                            <Text color="whiteAlpha.500" fontSize="sm">All wrapped up</Text>
+                        : null}
+                    </Box>
+                    {projectInfo?.treeFiles.map((i) => i !== 'src/apps/' + searchParams.get('app') + '/git.json' && (
+                        <Text fontSize="smaller" mb={1} ml={2} color="whiteAlpha.500">
+                            {i.replace('src/apps/' + searchParams.get('app') + '/', '')}
+                        </Text>
+                    ))}
+                </>
+                : repos.map((i, v) => (
+                    <Button variant="ghost" display="block" _hover={{ bg: 'whiteAlpha.100' }} _active={{ bg: 'whiteAlpha.100' }}
+                        onClick={() => handleConnection(i)} key={v}>  
+                        <Text fontSize="sm" color="whiteAlpha.500">{i.name}</Text>
+                    </Button>
+                ))}
+            </Box>
+            </> : <Box height="1"></Box>}
+            
+
+            <Text color={'#f2f2f2'} ml={5} mt={5} mb={2} pt={10}>Debug</Text>
+            {enableConsole ? <Box height="35vh" overflow="auto">
+                <Console logs={logs} variant="dark" />
+            </Box> : null}
 
             {/* <Accordion defaultIndex={[0]} borderWidth={0} allowMultiple>
                 
@@ -612,7 +1023,7 @@ const SidebarContentRight = ({ onClose, editor, ...rest }) => {
 
       </Box>
     )
-}
+})
 
 const NewFileModal = forwardRef((props, ref) => {
     
@@ -649,7 +1060,7 @@ const NewFileModal = forwardRef((props, ref) => {
                             onClose()
                         } else if(fileType === 'utils') {
                             const content = `export * from './${name}';`
-                            fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/utils/index.js&content=${content}&type=append`)
+                            fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/src/utils/index.js&content=${content}&type=append`)
                             .then(response => response.json())
                             .then(responseJson => {
                                 onClose()
@@ -709,7 +1120,7 @@ const FunctionsEditor = forwardRef((prop, ref) => {
         open(name, id) {
             setApp(id)
             setData({})
-            fetch(`http://localhost:5000/readFile?path=${id}/utils/${name}`)
+            fetch(`http://localhost:5000/readFile?path=${id}/src/utils/${name}`)
             .then(response => response.text())
             .then(responseText => {
                 const code = responseText
@@ -730,7 +1141,7 @@ const FunctionsEditor = forwardRef((prop, ref) => {
     }))
 
     const handleSave = () => {
-        fetch(`http://localhost:5000/writeFile?path=${app}/utils/${data?.name}&content=${encodeURIComponent(data?.code)}`)
+        fetch(`http://localhost:5000/writeFile?path=${app}/src/utils/${data?.name}&content=${encodeURIComponent(data?.code)}`)
             .then(response => response.json())
             .then(responseJson => {
                 //console.log(responseJson)
@@ -840,7 +1251,7 @@ const PackageEditor = forwardRef((props, ref) => {
     }
 
     const handleSave = () => {
-        fetch(`http://localhost:5000/writeFile?path=${app}/package.json&content=${encodeURIComponent(JSON.stringify(data))}`)
+        fetch(`http://localhost:5000/writeFile?path=${app}/package.json&content=${encodeURIComponent(JSON.stringify(data, null, '\t'))}`)
             .then(response => response.json())
             .then(responseJson => {
                 //console.log(responseJson)

@@ -96,7 +96,7 @@ const LibraryManager = forwardRef((props, ref) => {
     return (
         <Modal closeOnOverlayClick={false} isOpen={isOpen} onClose={onClose} size="5xl">
             <ModalOverlay bg='blackAlpha.300' backdropFilter='blur(10px) hue-rotate(90deg)' />
-            <ModalContent bg="blackAlpha.500" height="80%">
+            <ModalContent bg="blackAlpha.700" height="80%">
             <ModalHeader color="cyan.300">Library Manager</ModalHeader>
             <ModalCloseButton color="#ababab" />
             <ModalBody pb={6} pt={6} height="100%" width="100%" borderRadius={10} overflow="hidden">

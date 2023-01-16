@@ -30,12 +30,20 @@ function App () {
                     {modules.map((i) => {
                         if(typeof i === 'string') return
                         const Comp = i.module
-                        return <Route path={i.name} key={i.name} element={<Comp />} />
+                        return <Route path={i.name} key={i.name} element={<AppWrapper title={i.name}><Comp /></AppWrapper>} />
                     })}
                 </Route>
             </Routes>
         </BrowserRouter>
     )
+}
+
+function AppWrapper ({ children, title }) {
+    useEffect(() => {
+        document.title = title
+    }, [])
+
+    return children
 }
 
 export default App;

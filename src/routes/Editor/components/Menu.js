@@ -7,10 +7,17 @@ import {
     MenuItem,
     MenuList
 } from "@chakra-ui/react"
-import { SEMI_BACK } from "../../../utils/colors"
+import { BACKGROUND, SEMI_BACK } from "../../../utils/colors"
 import { VscLinkExternal } from "react-icons/vsc"
 
-const MenuBar = ({ app }) => {
+const MenuItemStyle = {
+    bg: 'whiteAlpha.100',
+    color: 'whiteAlpha.600',
+    _hover: {bg: 'whiteAlpha.200'},
+    _active: {bg: 'whiteAlpha.300'}
+}
+
+const MenuBar = ({ app, editor, onToggleView }) => {
     return (
         <div style={{
             flexDirection: 'row',
@@ -24,12 +31,12 @@ const MenuBar = ({ app }) => {
                     _hover={{bg: 'whiteAlpha.50'}} _active={{bg: 'whiteAlpha.100'}} color="whiteAlpha.500" fontSize="sm">
                     File
                 </MenuButton>
-                <MenuList>
-                    <MenuItem>Download</MenuItem>
-                    <MenuItem>Create a Copy</MenuItem>
-                    <MenuItem>Mark as Draft</MenuItem>
-                    <MenuItem>Delete</MenuItem>
-                    <MenuItem>Attend a Workshop</MenuItem>
+                <MenuList bg="black" pt={0} pb={0} borderWidth="0">
+                    <MenuItem {...MenuItemStyle} pt={2}>New Project</MenuItem>
+                    <MenuItem {...MenuItemStyle}>Open</MenuItem>
+                    <MenuItem {...MenuItemStyle}>Save Current</MenuItem>
+                    <MenuItem {...MenuItemStyle}>Share Project</MenuItem>
+                    <MenuItem {...MenuItemStyle} pb={2}>Go back to Dashboard</MenuItem>
                 </MenuList>
             </Menu>
             <Menu>
@@ -37,12 +44,10 @@ const MenuBar = ({ app }) => {
                     _hover={{bg: 'whiteAlpha.50'}} _active={{bg: 'whiteAlpha.100'}} color="whiteAlpha.500" fontSize="sm">
                     Edit
                 </MenuButton>
-                <MenuList>
-                    <MenuItem>Download</MenuItem>
-                    <MenuItem>Create a Copy</MenuItem>
-                    <MenuItem>Mark as Draft</MenuItem>
-                    <MenuItem>Delete</MenuItem>
-                    <MenuItem>Attend a Workshop</MenuItem>
+                <MenuList bg="black" pt={0} pb={0} borderWidth="0">
+                    <MenuItem {...MenuItemStyle} pt={2} onClick={() => editor.trigger('my-source', 'undo')}>Undo</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => editor.trigger('my-source', 'redo')}>Redo</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => editor.trigger('my-source', 'actions.find')} pb={2}>Find</MenuItem>
                 </MenuList>
             </Menu>
             <Menu>
@@ -50,25 +55,28 @@ const MenuBar = ({ app }) => {
                     _hover={{bg: 'whiteAlpha.50'}} _active={{bg: 'whiteAlpha.100'}} color="whiteAlpha.500" fontSize="sm">
                     View
                 </MenuButton>
-                <MenuList>
-                    <MenuItem>Download</MenuItem>
-                    <MenuItem>Create a Copy</MenuItem>
-                    <MenuItem>Mark as Draft</MenuItem>
-                    <MenuItem>Delete</MenuItem>
-                    <MenuItem>Attend a Workshop</MenuItem>
+                <MenuList bg="black" pt={0} pb={0} borderWidth="0">
+                    <MenuItem {...MenuItemStyle} pt={2} onClick={() => onToggleView('preview')}>Preview</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onToggleView('console')}>Console</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onToggleView('git')}>Github Management</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onToggleView('left')}>Left Panel</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onToggleView('right')} pb={2}>Right Panel</MenuItem>
                 </MenuList>
             </Menu>
             <Menu>
                 <MenuButton as={Button} variant="ghost" 
                     _hover={{bg: 'whiteAlpha.50'}} _active={{bg: 'whiteAlpha.100'}} color="whiteAlpha.500" fontSize="sm">
-                    Hosting
+                    Build
                 </MenuButton>
-                <MenuList>
-                    <MenuItem>Download</MenuItem>
-                    <MenuItem>Create a Copy</MenuItem>
-                    <MenuItem>Mark as Draft</MenuItem>
-                    <MenuItem>Delete</MenuItem>
-                    <MenuItem>Attend a Workshop</MenuItem>
+                <MenuList bg="black" pt={0} pb={0} borderWidth="0">
+                    <MenuItem {...MenuItemStyle} pt={2}>GIT Commit</MenuItem>
+                    <MenuItem {...MenuItemStyle}>GIT Push</MenuItem>
+                    <MenuItem {...MenuItemStyle}>GIT Pull</MenuItem>
+                    <MenuItem {...MenuItemStyle}>
+                        <Text mr={2}>Vercel</Text>
+                        <VscLinkExternal color="whiteAlpha.100" fontSize="15" /> 
+                    </MenuItem>
+                    <MenuItem {...MenuItemStyle} pb={2}>Settings</MenuItem>
                 </MenuList>
             </Menu>
 

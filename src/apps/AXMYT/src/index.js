@@ -1,15 +1,17 @@
-import A from "../components/A.js" 
-import React from 'react'
-import { test } from '../utils'
+import A from "./components/A.js" 
+import React, { useState } from 'react'
 
-export default function App() {
-    const [txt, setTxt] = React.useState('')
-    
+export default function App() { 
+    const [txt, setTxt] = useState('') 
+     
     return (
-        <>
-            <A label="okay"  />
-            <input placeholder="Type" onChange={e => setTxt(e.target.value)} />
-            <p>Text: {test()} {txt}</p>
+        <> 
+            <A label="dffsfsf"  />
+            <button onClick={() => {
+                console.error('hello') 
+            }}>
+                Hello, Click me!
+            </button> 
         </>
     )
 }

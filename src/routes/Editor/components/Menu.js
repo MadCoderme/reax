@@ -71,7 +71,8 @@ const MenuBar = ({ app, editor, onToggleView }) => {
                 <MenuList bg="black" pt={0} pb={0} borderWidth="0">
                     <MenuItem {...MenuItemStyle} pt={2}>GIT Commit</MenuItem>
                     <MenuItem {...MenuItemStyle}>GIT Push</MenuItem>
-                    <MenuItem {...MenuItemStyle}>GIT Pull</MenuItem>
+                    <MenuItem {...MenuItemStyle}>GIT Fetch</MenuItem>
+                    <MenuItem {...MenuItemStyle}>GIT Settings</MenuItem>
                     <MenuItem {...MenuItemStyle}>
                         <Text mr={2}>Vercel</Text>
                         <VscLinkExternal color="whiteAlpha.100" fontSize="15" /> 

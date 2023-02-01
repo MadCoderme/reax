@@ -5,6 +5,8 @@ const port = 5000
 import fs from 'node:fs'
 import { globby, globbySync } from 'globby'
 import { Octokit } from 'octokit'
+import http from 'http'
+import { Server } from "socket.io";
 import { exec } from 'node:child_process'
 
 const corsOptions = {
@@ -14,6 +16,13 @@ const corsOptions = {
 
 const octo = new Octokit({
 })
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+      origin: ["http://localhost:3000", "http://192.168.0.104:3000"]
+  }
+});
 
 app.use(express.json())
 app.use(function (req, res, next) {
@@ -32,10 +41,11 @@ app.get('/readFile', cors(corsOptions), (req, res) => {
 
 //write or update file content
 app.get('/writeFile', cors(corsOptions), (req, res) => {
+  let encoding = req?.query?.encoding ?? 'utf8'
   if(req?.query?.type === 'append') {
-    fs.appendFileSync('./src/apps/' + req.query.path, req.query.content, { encoding: 'utf8' })
+    fs.appendFileSync('./src/apps/' + req.query.path, req.query.content, { encoding })
   } else {
-    fs.writeFileSync('./src/apps/' + req.query.path, req.query.content, { encoding: 'utf8' })
+    fs.writeFileSync('./src/apps/' + req.query.path, req.query.content, { encoding })
   }
   res.json({ res: 'success' })
 })
@@ -46,10 +56,16 @@ app.post('/writeFile', cors(corsOptions), (req, res) => {
   res.json({ res: 'success' })
 })
 
+//delete a file
+app.get('/deleteFile', cors(corsOptions), (req, res) => {
+  fs.rmSync('./src/apps/' + req.query?.path)
+  res.json({ res: 'success' })
+})
+
 //get file list inside a directory
 app.get('/readFolder', cors(corsOptions), (req, res) => {
   const content = fs.readdirSync('./src/apps/' + req.query.path, { withFileTypes: true })
-  .filter(item => !item.isDirectory())
+  .filter(item => req.query?.includeFolders ? true : !item.isDirectory())
   .map(item => item.name)
   res.json(content)
 })
@@ -64,6 +80,27 @@ app.get('/newFile', cors(corsOptions), (req, res) => {
     res.json({res: 'success'})
   }
 })
+
+//create new project directory
+app.get('/newProject', cors(corsOptions), (req, res) => {
+  try {
+    if(req.query?.id) {
+      const id = req.query?.id
+      fs.mkdirSync('./src/apps/' + id)
+      fs.mkdirSync('./src/apps/' + id + '/src/components', { recursive: true })
+      fs.mkdirSync('./src/apps/' + id + '/src/utils')
+      fs.writeFileSync('./src/apps/' + id + '/src/index.js', indexTemplate)
+      fs.writeFileSync('./src/apps/' + id + '/package.json', packageTemplate(req.query?.name))
+      fs.writeFileSync('./src/apps/' + id + '/git.json', gitTemplate(req.query?.name))
+      fs.writeFileSync('./src/apps/' + id + '/appearance.json', appearanceTemplate(req.query?.name, req.query?.id))
+      res.json({res: 'success'})
+    }
+  } catch (err) {
+    res.json({err})
+    console.log(err)
+  }
+})
+
 
 //glob
 app.get('/glob', cors(corsOptions), async(req, res) => {
@@ -107,13 +144,22 @@ app.get('/readFiles', cors(corsOptions), async(req, res) => {
     const files = JSON.parse(req.query.files)
     let formattedFileArr = []
     files.forEach(el => {
-      let content = el.includes('public/icon.') ? fs.readFileSync(el, 'base64') :  fs.readFileSync(el, 'utf-8')
-      formattedFileArr.push({
-        content, 
-        path: el.replace(req.query.root, ''),
-        type: 'commit',
-        mode: '100644'
-      })
+      if(el.startsWith('DEL-')) {
+        formattedFileArr.push({
+          path: el.replace('DEL-', '').replace(req.query.root, ''),
+          type: 'blob',
+          mode: '100644',
+          sha: null
+        })
+      } else {
+        let content = el.includes('public/icon.') ? fs.readFileSync(el, 'base64') :  fs.readFileSync(el, 'utf-8')
+        formattedFileArr.push({
+          content, 
+          path: el.replace(req.query.root, ''),
+          type: 'commit',
+          mode: '100644'
+        })
+      }
     })
 
     res.json(formattedFileArr)
@@ -192,7 +238,30 @@ app.get('/installModule', cors(corsOptions), (req, res) => {
 })
 
 
-app.listen(port, () => {
+io.on('connection', (socket) => {
+  console.log('a user connected');
+
+  socket.on('code', e => {
+    socket.broadcast.emit('code', e)
+  })
+
+  socket.on('cursorPos', e => {
+    socket.broadcast.emit('cursorPos', e)
+  })
+
+  socket.on('fileSwitch', e => {
+    socket.broadcast.emit('fileSwitch', e)
+  })
+
+  fs.watch('./src/apps/').on('change', (event, file) => {
+    if(fs.existsSync('./src/apps/' + file)) {
+      socket.emit('apps', file)
+    }
+  })
+
+});
+
+server.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
 
@@ -251,3 +320,54 @@ const ManifestJSON = (shortName, name, themeColor, backgroundColor) => `{
   "background_color": "${backgroundColor}"
 }
 `
+
+const indexTemplate = 
+`
+import React from 'react'
+
+export default function App() { 
+    return (
+        <h1>Hello world</h1>
+    )
+}
+`
+
+const packageTemplate = (name) => 
+`{
+  "name": "${name}",
+  "version": "0.0.1",
+  "dependencies": {
+      "@testing-library/jest-dom": "^5.16.5",
+      "@testing-library/react": "^13.4.0",
+      "@testing-library/user-event": "^13.5.0",
+      "react": "1.0.0",
+      "react-dom": "^18.2.0",
+      "react-scripts": "5.0.1",
+      "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+      "start": "react-scripts start",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+      "extends": ["react-app", "react-app/jest"]
+  },
+  "browserslist": {
+      "production": [">0.2%", "not dead", "not op_mini all"],
+      "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+  }
+}`
+
+const gitTemplate = (name) => `{"repo": "${name}", "treeFiles": [], "isSetup": false, "commitSHA": "", "newCommitSHA": ""}`
+const appearanceTemplate = (name, id) => 
+`{
+	"name": "${name} - ${id}",
+	"shortName": "${name}",
+	"description": "",
+	"lang": "en",
+	"themeColor": "black",
+	"backgroundColor": "white",
+	"icon": ""
+}`

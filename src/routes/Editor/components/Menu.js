@@ -7,8 +7,9 @@ import {
     MenuItem,
     MenuList
 } from "@chakra-ui/react"
-import { BACKGROUND, SEMI_BACK } from "../../../utils/colors"
+import { SEMI_BACK } from "../../../utils/colors"
 import { VscLinkExternal } from "react-icons/vsc"
+import { useNavigate } from "react-router-dom"
 
 const MenuItemStyle = {
     bg: 'whiteAlpha.100',
@@ -17,7 +18,10 @@ const MenuItemStyle = {
     _active: {bg: 'whiteAlpha.300'}
 }
 
-const MenuBar = ({ app, editor, onToggleView }) => {
+const MenuBar = ({ app, editor, onToggleView, onAction }) => {
+
+    const navigate = useNavigate()
+
     return (
         <div style={{
             flexDirection: 'row',
@@ -32,11 +36,11 @@ const MenuBar = ({ app, editor, onToggleView }) => {
                     File
                 </MenuButton>
                 <MenuList bg="black" pt={0} pb={0} borderWidth="0">
-                    <MenuItem {...MenuItemStyle} pt={2}>New Project</MenuItem>
-                    <MenuItem {...MenuItemStyle}>Open</MenuItem>
-                    <MenuItem {...MenuItemStyle}>Save Current</MenuItem>
-                    <MenuItem {...MenuItemStyle}>Share Project</MenuItem>
-                    <MenuItem {...MenuItemStyle} pb={2}>Go back to Dashboard</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => navigate('/dashboard?newProject=true')} pt={2}>New Project</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => navigate('/dashboard')}>Open</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onAction('save')}>Save Current</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onAction('share')}>Share Project</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => navigate('/dashboard')} pb={2}>Go back to Dashboard</MenuItem>
                 </MenuList>
             </Menu>
             <Menu>
@@ -69,15 +73,15 @@ const MenuBar = ({ app, editor, onToggleView }) => {
                     Build
                 </MenuButton>
                 <MenuList bg="black" pt={0} pb={0} borderWidth="0">
-                    <MenuItem {...MenuItemStyle} pt={2}>GIT Commit</MenuItem>
-                    <MenuItem {...MenuItemStyle}>GIT Push</MenuItem>
-                    <MenuItem {...MenuItemStyle}>GIT Fetch</MenuItem>
-                    <MenuItem {...MenuItemStyle}>GIT Settings</MenuItem>
-                    <MenuItem {...MenuItemStyle}>
+                    <MenuItem {...MenuItemStyle} pt={2} onClick={() => onAction('gitrefresh')}>GIT Refresh</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onAction('gitcommit')}>GIT Commit</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onAction('gitpush')}>GIT Push</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onAction('gitsettings')}>GIT Settings</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => window.open('https://vercel.com/solutions/react')}>
                         <Text mr={2}>Vercel</Text>
                         <VscLinkExternal color="whiteAlpha.100" fontSize="15" /> 
                     </MenuItem>
-                    <MenuItem {...MenuItemStyle} pb={2}>Settings</MenuItem>
+                    <MenuItem {...MenuItemStyle} onClick={() => onAction('settings')} pb={2}>Settings</MenuItem>
                 </MenuList>
             </Menu>
 

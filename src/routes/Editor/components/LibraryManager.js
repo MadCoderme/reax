@@ -57,7 +57,7 @@ const LibraryManager = forwardRef((props, ref) => {
   }
 
   const handleInstallation = (name, isInstalled) => {
-    if(isInstalled) {
+    if(!isInstalled) {
       fetch(`http://localhost:5000/installModule?name=${name}`)
         .then((response) => response.json())
         .then(responseJson => {

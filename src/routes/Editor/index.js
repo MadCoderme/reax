@@ -1,9 +1,7 @@
 import React,  { forwardRef, useEffect, useImperativeHandle, useRef, useState, useCallback } from "react"
 import {
   Box,
-  Flex,
   AccordionIcon,
-  Link,
   Accordion,
   AccordionItem,
   AccordionButton,
@@ -25,35 +23,41 @@ import {
   TabPanel,
   TabPanels,
   TabList,
-  Container,
   Input,
   Select,
-  Card,
-  CardBody,
   useToast,
   Circle,
   HStack,
+  Container,
+  Progress,
 
 } from '@chakra-ui/react';
-import { VscCircleFilled, VscEdit, VscNewFile, VscTrash } from "react-icons/vsc"
+import { VscCircleFilled, VscNewFile, VscTrash } from "react-icons/vsc"
 import CodeEditor from "@monaco-editor/react"
 import io from "socket.io-client"
-import { Octokit, App } from "octokit"
-import { Hook, Console, Decode, Unhook } from 'console-feed'
+import { Octokit } from "octokit"
+import { Hook, Console, Unhook } from 'console-feed'
 
 import { SEMI_BACK } from "../../utils/colors";
 import ComponentEditor from './components/ComponentEditor'
 import Menu from "./components/Menu";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import LibraryManager from "./components/LibraryManager";
 import ConfigureAppearance from "./components/ConfigureAppearance";
+import GITSettings from "./components/GITSettings";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { auth, db } from "../../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import ConfirmationDialog from "./components/ConfirmationDialog";
+import Settings from "./components/Settings";
+import CodexResponse from "./components/CodexResponse";
 
-const socket = io("ws://localhost:3001");
+const socket = io("ws://localhost:5000");
 var inter = null
-const uid = +new Date()
 
 export default function Editor(params) {
 
+    const [loading, setLoading] = useState(true)
     const [code, setCode] = useState(``);
     const [editor, setEditor] = useState(null)
     const [isUnsaved, setUnsaved] = useState(false)
@@ -61,6 +65,7 @@ export default function Editor(params) {
     const [isLeftVisible, setLeftVisible] = useState(true)
     const [isRightVisible, setRightVisible] = useState(true)
     const [isPreviewVisible, setPreviewVisible] = useState(true)
+    const [userInfo, setUserInfo] = useState(null)
     const componentEditor = useRef()
     const functionEditor = useRef()
     const packageEditor = useRef()
@@ -68,7 +73,50 @@ export default function Editor(params) {
     const libManager = useRef()
     const appearanceConfigure = useRef()
     const sidebarRight = useRef()
+    const gitSettings = useRef()
+    const settings = useRef()
     const toast = useToast()
+    const navigate = useNavigate()
+
+    useEffect(() => {
+        document.title = "Editor"
+        onAuthStateChanged(auth, (user) => {
+            if(!user) {
+                navigate('/auth')
+            } else {
+                getDoc(doc(db, 'users', user.uid))
+                    .then(docSnap => {
+                        setUserInfo(docSnap.data())
+                        getDocs(query(collection(db, "projects"), where("projectIds", "array-contains", searchParams.get('app'))))
+                        .then(docs => {
+                            if(docs.size > 0) {
+                                docs.forEach(el => {
+                                    let all = el.data()?.list
+                                    let currP = all.find(p => p.id === searchParams.get('app'))
+                                    if(currP.users.includes(docSnap.data().name) || el.id === user.uid) {
+                                        setLoading(false)
+                                        searchParams.set('user', user.uid)
+                                        setSearchParams(searchParams)
+                                    } else {
+                                        toast({
+                                            title: "You don't have permission to view this project",
+                                            status: 'error',
+                                            duration: 10000
+                                        })
+                                    }
+                                })
+                            } else {
+                                toast({
+                                    title: "This project could not be found",
+                                    status: 'error',
+                                    duration: 10000
+                                })
+                            }
+                        })
+                    })
+            }
+        })
+    }, [])
 
     useEffect(() => {
         const id = searchParams.get('app')
@@ -105,9 +153,9 @@ export default function Editor(params) {
     }, [])
 
     useEffect(() => {
-        if(isPreviewVisible) 
+        if(isPreviewVisible && !loading) 
             dragElement(document.getElementById('resizer-block'))
-    }, [isPreviewVisible])
+    }, [isPreviewVisible, loading])
 
     const editorOnMount = (e, m) => {
         var shouldSend = true
@@ -121,12 +169,13 @@ export default function Editor(params) {
             let params = new URLSearchParams(window.location.search);
             let app = params.get('app')
             let file = params.get('file')
+            let uid = params.get('user')
             socket.emit('code', {
                 change: ev.changes[0].text,
                 range: ev.changes[0].range,
                 app,
                 file,
-                uid: uid
+                uid
             })
         })
 
@@ -193,7 +242,7 @@ export default function Editor(params) {
             let app = params.get('app')
             let file = params.get('file')
 
-            if(ev.uid !== uid && ev.app === app && ev.file === file) {
+            if(ev.uid !== auth.currentUser.uid && ev.app === app && ev.file === file) {
                 const randomCursor = colors[Math.floor(Math.random() * colors.length)];
                 let exists = cursors.find(el => el.uid === ev.uid)
                 if(exists) {
@@ -216,7 +265,7 @@ export default function Editor(params) {
             const params = new URLSearchParams(window.location.search);
             const app = params.get('app')
             const file = params.get('file')
-            if(ev.uid !== uid && app === ev.app && file === ev.file) {
+            if(ev.uid !== auth.currentUser.uid && app === ev.app && file === ev.file) {
                 const id = { major: 1, minor: 1 };
                 const op = {
                     identifier: id,
@@ -244,7 +293,7 @@ export default function Editor(params) {
                     newPos: currPosition,
                     app,
                     file,
-                    uid: uid
+                    uid: auth.currentUser.uid
                 })
                 prevPos = currPosition
             } 
@@ -272,6 +321,65 @@ export default function Editor(params) {
                 break;
             default:
                 break;
+        }
+    }
+
+    function handleMenuAction(type) {
+        switch (type) {
+            case 'gitrefresh':
+                sidebarRight?.current?.refreshGit()
+                break;
+            case 'gitcommit':
+                sidebarRight?.current?.gitCommit()
+                break;
+            case 'gitpush':
+                sidebarRight?.current?.gitPush()
+                break;
+            case 'gitsettings':
+                gitSettings?.current?.open({...userInfo, uid: auth.currentUser.uid})
+                break;
+            case 'settings':
+                settings?.current?.open({...userInfo, uid: auth.currentUser.uid})
+                break;
+            case 'save':
+                save()
+                break;
+            case 'share': {
+                navigator.clipboard.writeText('http://localhost:3000/apps/' + searchParams.get('app'))
+                toast({
+                    title: 'Copied Link to clipboard',
+                    status: 'success',
+                    duration: 2000,
+                    isClosable: true,
+                })
+                break;
+            }
+            default:
+                break;
+        }
+
+        function save() {
+            const params = new URLSearchParams(window.location.search);
+            const app = params.get('app')
+            const file = params.get('file')
+            const content = encodeURIComponent(editor.getValue())
+            fetch(`http://localhost:5000/writeFile?path=${app}/${file}&content=${content}`)
+                .then(response => response.json())
+                .then(responseJson => {
+                        //console.log(responseJson)
+                        toast({
+                            title: 'Saved Successfully',
+                            status: 'success',
+                            duration: 2000,
+                            isClosable: true,
+                        })
+                        setUnsaved(false)
+                        fetch(`http://localhost:5000/addFileForGithub?app=${app}&path=${app}/${file}`)
+                            .then(response => response.json())
+                            .then(responseJson => {
+                                //console.log(responseJson)
+                            })
+                    })
         }
     }
 
@@ -305,10 +413,20 @@ export default function Editor(params) {
         }
     }
 
+    if(loading) {
+        return (
+            <Container minWidth="99.5vw" minHeight="100vh" overflow="hidden" background={SEMI_BACK}
+                display="flex" justifyContent="center" alignItems="center">
+                <Progress size='xs' w="250px" bg="whiteAlpha.500" colorScheme="cyan" isIndeterminate />
+            </Container>
+        )
+    }
+
     return (
-        <Box minH="100%">
-            <Menu editor={editor} app={searchParams.get('app')} onToggleView={handleViewToggle} />
-            <Grid templateColumns='repeat(6, 1fr)' gap={0} height="95%">
+        <Container minWidth="99.5vw" minHeight="100vh" overflow="hidden" background={SEMI_BACK}>
+            <Menu editor={editor} app={searchParams.get('app')} onToggleView={handleViewToggle}
+                onAction={handleMenuAction} />
+            <Grid templateColumns='repeat(6, 1fr)' gap={0} height="96vh">
                 {isLeftVisible ? 
                 <GridItem colSpan={1} h='100%'>
                     <SidebarContent
@@ -320,10 +438,12 @@ export default function Editor(params) {
                         utilsLib={utilsLib}
                         libManager={libManager}
                         appearanceConfigure={appearanceConfigure}
+                        sidebarRight={sidebarRight}
                     /> 
                 </GridItem>: null}
                 <GridItem colSpan={!isLeftVisible && !isRightVisible ? 6 :
-                    !isLeftVisible || !isRightVisible ? 5 : 4} h='100%' bg="blackAlpha.500">
+                    !isLeftVisible || !isRightVisible ? 5 : 4} 
+                    height="full" bg="#191919">
 
                     <Box  background="#2b2d2f" pl={5} pr={5} alignItems="center" >
                         <Text color="whiteAlpha.500" fontSize={14} display="flex" flexDirection="row">
@@ -331,8 +451,7 @@ export default function Editor(params) {
                             {isUnsaved ? <VscCircleFilled display="inline-block" style={{marginTop: 5, marginLeft: 5}} /> : null}
                         </Text>
                     </Box>
-                    <div style={{height: '97%'}}>
-                        <div id="editor-panel" style={{ height: '80%' }}>
+                    <Box id="editor-panel" height="75%">
                             <CodeEditor
                                 height="100%"
                                 width="100%"
@@ -344,8 +463,8 @@ export default function Editor(params) {
                                     setCode(v)
                                 }}
                             />
-                        </div>
-                        {isPreviewVisible ? <Box id="preview-panel" height="20%" width="100%" bg="white">
+                    </Box>
+                    {isPreviewVisible ? <Box id="preview-panel" height="20%" width="100%" bg="white">
                             <div style={{
                                 width: '100%',
                                 background: '#2b2d2f',
@@ -353,15 +472,17 @@ export default function Editor(params) {
                             }} id="resizer-block">
                                 <Text color="whiteAlpha.500" fontSize={14} ml={5}>Preview</Text>
                             </div>
-                            <iframe id="preview-iframe" src={"http://localhost:3000/apps/" + searchParams.get('app')} loading="lazy" />
-                        </Box> : null}
-                    </div>
+                            <iframe title="Preview" id="preview-iframe" src={"http://localhost:3000/apps/" + searchParams.get('app')} loading="lazy" />
+                    </Box> : null}
                 </GridItem>
                 <GridItem colSpan={1} h='100%'>
-                    <SidebarContentRight
+                    {userInfo?.accessToken ? <SidebarContentRight
                         ref={sidebarRight}
                         display={{ base: 'none', md: 'block' }}
-                    />
+                        token={userInfo?.accessToken}
+                        userInfo={userInfo}
+                        uid={auth.currentUser.uid}
+                    /> : null}
                 </GridItem>
             </Grid>
 
@@ -371,6 +492,8 @@ export default function Editor(params) {
             <UtilsLibrary ref={utilsLib} />
             <LibraryManager ref={libManager} />
             <ConfigureAppearance ref={appearanceConfigure} />
+            <GITSettings ref={gitSettings} />
+            <Settings ref={settings} />
            
             {/* <Drawer
                 autoFocus={false}
@@ -384,17 +507,13 @@ export default function Editor(params) {
                     <SidebarContent onClose={onClose} />
                 </DrawerContent>
             </Drawer> */}
-        </Box>
+        </Container>
     )
 }
 
-const LinkItems = [
-    { name: 'Header', code: '<Header title={""} />' },
-    { name: 'Footer', code: '<Footer title={""} />' },
-    { name: 'Text', code: '<Text title={""} />' }
-];
 
-const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, packageEditor, utilsLib, libManager, appearanceConfigure }) => {
+const SidebarContent = ({ editor, componentEditor, functionEditor, packageEditor, utilsLib, libManager, appearanceConfigure,
+                            sidebarRight }) => {
 
     const [searchParams, setSearchParams] = useSearchParams()
     const newModal = useRef()
@@ -411,6 +530,7 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
         ]
     })
     const [mates, setMates] = useState({})
+    const dialog = useRef()
 
     useEffect(() => {
         const id = searchParams.get('app')
@@ -443,7 +563,7 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             let app = params.get('app')
             let file = params.get('file')
 
-            if(e.app === app && e.uid !== uid) {
+            if(e.app === app && e.uid !== auth.currentUser.uid) {
                 const paths = e.file.split('/')
                 let prev = {...mates}
                 if(prev[paths[0]]) {
@@ -465,10 +585,26 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
         let app = params.get('app')
         let file = params.get('file')
         socket.emit('fileSwitch', {
-            uid,
+            uid: auth.currentUser.uid,
             app,
             file
         })
+    }
+
+    const handleDelete = (file) => {
+        const id = searchParams.get('app')
+        if(!id) return 
+
+        sidebarRight?.current?.removeFilefromTree(file)
+        fetch(`http://localhost:5000/deleteFile?path=${id}/src/${file}`)
+            .then(response => response.json())
+            .then(responseJson => {
+                if(responseJson.res === 'success') {
+                    let prev = {...dirs}
+                    prev.src = prev.src.filter(el => el !== file)
+                    setDirs(prev)
+                }
+            })
     }
 
     const insertComponent = (item) => {
@@ -546,7 +682,7 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
                             <GridItem w='100%'>
                                 <Text color="cyan.300">{item.length > 10 ? item.substring(0, 10) + '...' : item}</Text>
                             </GridItem>
-                            <GridItem w='100%' >
+                            <GridItem w='100%'>
                                 {title === "components" ? <>
                                     <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => componentEditor?.current?.open(item)}>
                                         Edit
@@ -559,7 +695,12 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
                                     <Button colorScheme={'cyan'} size="xs" mr={2} onClick={() => functionEditor?.current?.open(item, searchParams.get('app'))}>
                                         Edit
                                     </Button>
-                                </> : null}
+                                </> : 
+                                <Button colorScheme={'red'} size="s" p={1} mr={2} variant="ghost"
+                                    onClick={() => dialog?.current?.open(item)}
+                                    _hover={{background: 'whiteAlpha.200'}} _active={{background: 'whiteAlpha.200'}}>
+                                    <VscTrash />
+                                </Button>}
                             </GridItem>
                         </Grid>
                         <HStack spacing='-10px'>
@@ -619,22 +760,25 @@ const SidebarContent = ({ onClose, editor, componentEditor, functionEditor, pack
             </Button>
 
             <NewFileModal ref={newModal} />
+            <ConfirmationDialog ref={dialog} title="Delete File" description="This action cannot be undone" type="delete"
+                onAction={handleDelete} />
       </Box>
     )
 }
 
 
-const token = `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`
-const octokit = new Octokit({ auth: token })
+const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid, ...rest }, ref) => {
 
-const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
+    const octokit = new Octokit({ auth: token })
 
     const [searchParams, setSearchParams] = useSearchParams()
     const toast = useToast()
+    const codex = useRef()
     const [login, setLogin] = useState(null)
     const [enableConsole, setEnableConsole] = useState(true)
     const [enableGit, setEnableGit] = useState(true)
     const [projectInfo, setProjectInfo] = useState({})
+    const [branch, setBranch] = useState('main')
     const [logs, setLogs] = useState([])
     const [repos, setRepos] = useState([])
 
@@ -644,11 +788,32 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
         },
         toggleGithub() {
             setEnableGit(prev => !prev)
+        },
+        refreshGit() {
+            getProjectInfo()
+        },
+        gitCommit() {
+            handleCommit()
+        },
+        gitPush() {
+            handlePush()
+        },
+        gitFetch() {
+            handleFetch()
+        },
+        removeFilefromTree(file) {
+            removeFilefromTree(file)
         }
     }))
     
     useEffect(() => {
-        getProjectInfo()
+        getDoc(doc(db, 'projects', uid))
+            .then(docSnap => {
+                let data = docSnap.data()?.list
+                let info = data.find(el => el.id === searchParams.get('app'))
+                info?.branch && setBranch(info.branch)
+                getProjectInfo()
+            })
     }, [])
 
     useEffect(() => {
@@ -691,17 +856,28 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
                             repo: code?.repo,
                             tree_sha: code?.treeHash
                         })
-                        console.log(tree)
                     } else {
                         try {
                             const commits = await octokit.rest.repos.listCommits({
                                 owner: login,
                                 repo: code?.repo,
+                                sha: branch
                             })
                             const commitSHA = commits.data[0].sha
-                            let prev = {...code}
-                            prev.commitSHA = commitSHA
-                            setProjectInfo(prev)
+                            if(code?.commitSHA !== commitSHA) {
+                                handleFetch(commitSHA, code?.repo)
+                                    .then(() => {
+                                        let prev = {...code}
+                                        prev.commitSHA = commitSHA
+                                        fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                                            .then(response => response.json())
+                                            .then(responseJson => {
+                                                setProjectInfo(prev)
+                                                window.location.reload()
+                                            })
+                                    })
+                            }
+                            
                             if(!code?.isSetup) {
                                 fetch(`http://localhost:5000/addDirForGithub?app=${id}`)
                                     .then(response => response.json())
@@ -816,7 +992,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
                                     responseJson[responseJson.indexOf(iconFile)].type = 'blob'
                                 }
                                 
-                                console.log(responseJson)
+                                //console.log(responseJson)
                                 const {
                                     data: { sha: currentTreeSHA },
                                 } = await octokit.rest.git.createTree({
@@ -841,7 +1017,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
                                     owner: login,
                                     repo: projectInfo?.repo,
                                     sha: newCommitSHA,
-                                    ref: "heads/main", 
+                                    ref: "heads/" + branch, 
                                     force: true
                                 })
 
@@ -921,7 +1097,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
                 owner: login,
                 repo: projectInfo?.repo,
                 sha: projectInfo?.newCommitSHA,
-                ref: "heads/main",
+                ref: "heads/" + branch,
             })
     
             let prev = {...projectInfo}
@@ -944,6 +1120,88 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
         })
     }
 
+    const handleFetch = (sha, repo) => {
+        return new Promise((resolve, reject) => {
+            octokit.rest.repos.getCommit({
+                owner: login,
+                repo: repo,
+                ref: sha
+            })
+            .then(async({data: {files}}) => {
+                if(!files.find(el => !el?.filename.startsWith('public/'))) {
+                    return
+                }
+                
+                toast({
+                    title: 'Updating Local Content...',
+                    status: 'success',
+                    duration: 2000,
+                    isClosable: true,
+                })
+    
+                for(const el of files) {
+                    const { data } = await octokit.rest.repos.getContent({
+                        owner: login,
+                        repo: projectInfo?.repo,
+                        path: el.filename
+                    })
+
+                    await fetch(
+                        `http://localhost:5000/writeFile?path=${searchParams.get('app')}/${el.filename}&content=${encodeURIComponent(atob(data.content))}`)
+                    //const responseJson = await response.json()
+                    //console.log(responseJson)
+                }
+    
+                toast({
+                    title: 'Successful! Reloading Editor...',
+                    status: 'success',
+                    duration: 2000,
+                    isClosable: true,
+                })
+                resolve()
+            })
+        })
+    }
+
+    const removeFilefromTree = (file) => {
+        let prev = {...projectInfo}
+        prev.treeFiles = prev.treeFiles.map(i => i.endsWith(file) && !i.startsWith('DEL-') ? i = 'DEL-' + i : i)
+
+        fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+            .then(response => response.json())
+            .then(responseJson => {
+                setProjectInfo(prev)
+            })
+    }
+
+    const handleCodex = (e) => {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault()
+            toast({
+                title: 'Loading response...',
+                status: 'loading',
+                duration: 2000,
+                isClosable: true,
+            })
+            fetch('https://api.openai.com/v1/engines/code-davinci-002/completions', {
+                method: 'post',
+                headers: new Headers({
+                    'Authorization': 'Bearer '+ userInfo?.openaiAPI, 
+                    'Content-Type': 'application/json',
+                }),
+                body: JSON.stringify({
+                    prompt: e.target.value,
+                    max_tokens: 500,
+                    temperature: 0
+                })
+            })
+            .then(response => response.json())
+            .then(responseJson => {
+                responseJson?.choices && codex?.current?.open(responseJson.choices[0].text)
+            })
+        }
+    }
+
     return (
       <Box
         bg={SEMI_BACK}
@@ -951,6 +1209,11 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
         w="full"
         h="full"
         {...rest}>
+            <Text color={'#f2f2f2'} ml={5} pt={10} mb={2}>Codex</Text>
+            {userInfo?.openaiAPI ? <Input placeholder="Prompt (Press Enter)" colorScheme="cyan" width="85%" ml={5}
+                onKeyDown={handleCodex} color="whiteAlpha.800" />
+            : <Text color="whiteAlpha.500" ml={5}>Please add an API Key from OpenAI</Text>}
+            <CodexResponse ref={codex} />
             {enableGit ? 
             <>
             <Text color={'#f2f2f2'} ml={5} pt={10} mb={2}>Github</Text>
@@ -958,7 +1221,8 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
                 {projectInfo?.repo ? 
                 <>
                     <Box ml={2}>
-                        {projectInfo?.treeFiles.length > 0 ? <Button variant="outline" colorScheme="cyan" size="sm" mr={2} mb={2} p={2}
+                        {projectInfo?.treeFiles.length > 0 && !projectInfo?.newCommitSHA
+                         ? <Button variant="outline" colorScheme="cyan" size="sm" mr={2} mb={2} p={2}
                             _hover={{ bg: 'whiteAlpha.50' }} _active={{ bg: 'whiteAlpha.100' }}
                             onClick={handleCommit}>
                             Commit
@@ -971,11 +1235,15 @@ const SidebarContentRight = forwardRef(({ onClose, editor, ...rest }, ref) => {
                             <Text color="whiteAlpha.500" fontSize="sm">All wrapped up</Text>
                         : null}
                     </Box>
-                    {projectInfo?.treeFiles.map((i) => i !== 'src/apps/' + searchParams.get('app') + '/git.json' && (
-                        <Text fontSize="smaller" mb={1} ml={2} color="whiteAlpha.500">
-                            {i.replace('src/apps/' + searchParams.get('app') + '/', '')}
-                        </Text>
-                    ))}
+                    {projectInfo?.treeFiles.map((i) => {
+                        if(i !== 'src/apps/' + searchParams.get('app') + '/git.json') {
+                            return (
+                                <Text fontSize="smaller" mb={1} ml={2} color="whiteAlpha.500">
+                                    {i.replace('src/apps/' + searchParams.get('app') + '/', '')}
+                                </Text>
+                            )
+                        } 
+                    })}
                 </>
                 : repos.map((i, v) => (
                     <Button variant="ghost" display="block" _hover={{ bg: 'whiteAlpha.100' }} _active={{ bg: 'whiteAlpha.100' }}

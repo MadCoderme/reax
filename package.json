@@ -11,9 +11,13 @@
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
+    "colors": "^1.4.0",
+    "concurrently": "^7.6.0",
     "console-feed": "^3.4.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "firebase": "^9.16.0",
+    "firebaseui": "^6.0.2",
     "framer-motion": "^7.10.2",
     "fs": "^0.0.1-security",
     "globby": "^13.1.3",
@@ -24,6 +28,8 @@
     "react-icons": "^4.7.1",
     "react-router-dom": "^6.6.1",
     "react-scripts": "5.0.1",
+    "short-unique-id": "^4.4.4",
+    "socket.io": "^4.5.4",
     "socket.io-client": "^4.5.4",
     "web-vitals": "^2.1.4"
   },
@@ -31,7 +37,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "dev": "concurrently \"yarn start\" \"node server.mjs\""
   },
   "eslintConfig": {
     "extends": [
@@ -51,5 +58,6 @@
       "last 1 safari version"
     ]
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "proxy": "http://localhost:5000"
 }

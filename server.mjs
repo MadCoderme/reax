@@ -24,13 +24,13 @@ const octo = new Octokit({
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-      origin: ["http://localhost:3000", "http://192.168.0.104:3000"]
+      origin: ["https://retask.onrender.com"]
   }
 });
 
 app.use(express.json())
 app.use(function (req, res, next) {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.setHeader('Access-Control-Allow-Origin', 'https://retask.onrender.com');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
   res.setHeader('Access-Control-Allow-Credentials', true);

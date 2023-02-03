@@ -152,7 +152,7 @@ export default function Dashboard ({ onNewProject }) {
     return (
         <Container minWidth="99vw" minHeight="100vh" overflowX="hidden" background={SEMI_BACK}>
             <Text color="cyan.500" fontSize={30} mt={5}
-                cursor="pointer" onClick={() => navigate('/')}>Reax</Text>
+                cursor="pointer" onClick={() => navigate('/')}>Retask</Text>
             <Tabs colorScheme="cyan" mt={10} width="100%">
                     <TabList width="100%">
                         <Tab color="whiteAlpha.500" _selected={{color: 'whiteAlpha.900'}}>Projects</Tab>

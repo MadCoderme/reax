@@ -12,7 +12,7 @@ import Home from './routes/Home';
 
 function App () {
 
-    const [modules, setModules] = useState(['AXMYT'])
+    const [modules, setModules] = useState([])
 
     useEffect(() => {
         fetch(`http://localhost:5000/readFolder?includeFolders=true&path=`)

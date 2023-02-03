@@ -1,7 +1,7 @@
 import express from 'express'
-const app = express()
 import cors from 'cors'
-const port = 5000
+import path from 'path'
+import { fileURLToPath } from 'url'
 import fs from 'node:fs'
 import { globby, globbySync } from 'globby'
 import { Octokit } from 'octokit'
@@ -9,10 +9,14 @@ import http from 'http'
 import { Server } from "socket.io";
 import { exec } from 'node:child_process'
 
+const port = 4000
+const app = express()
 const corsOptions = {
   origin: 'http://localhost:3000',
   optionsSuccessStatus: 200
 }
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const octo = new Octokit({
 })
@@ -32,6 +36,7 @@ app.use(function (req, res, next) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   next();
 })
+app.use(express.static(path.resolve(__dirname, './build')))
 
 //read file content
 app.get('/readFile', cors(corsOptions), (req, res) => {
@@ -235,6 +240,10 @@ app.get('/installModule', cors(corsOptions), (req, res) => {
       res.json({res: 'success', output: out})
     }
   })
+})
+
+app.get('*', (req, res) => {
+  res.sendFile(path.resolve(__dirname, './build', 'index.html'))
 })
 
 

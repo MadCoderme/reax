@@ -52,7 +52,7 @@ import ConfirmationDialog from "./components/ConfirmationDialog";
 import Settings from "./components/Settings";
 import CodexResponse from "./components/CodexResponse";
 
-const socket = io("ws://localhost:5000");
+const socket = io("wss://retask-socket.onrender.com:5000");
 var inter = null
 
 export default function Editor(params) {
@@ -128,7 +128,7 @@ export default function Editor(params) {
             file = 'src/index.js'
         }
 
-        fetch(`http://localhost:5000/readFile?path=${id}/${file}`)
+        fetch(`https://retask-socket.onrender.com/readFile?path=${id}/${file}`)
             .then(response => response.text())
             .then(responseText => {
                 if(editor) {
@@ -187,7 +187,7 @@ export default function Editor(params) {
                 const app = params.get('app')
                 const file = params.get('file')
                 const content = encodeURIComponent(e.getValue())
-                fetch(`http://localhost:5000/writeFile?path=${app}/${file}&content=${content}`)
+                fetch(`https://retask-socket.onrender.com/writeFile?path=${app}/${file}&content=${content}`)
                     .then(response => response.json())
                     .then(responseJson => {
                         //console.log(responseJson)
@@ -198,7 +198,7 @@ export default function Editor(params) {
                             isClosable: true,
                         })
                         setUnsaved(false)
-                        fetch(`http://localhost:5000/addFileForGithub?app=${app}&path=${app}/${file}`)
+                        fetch(`https://retask-socket.onrender.com/addFileForGithub?app=${app}&path=${app}/${file}`)
                             .then(response => response.json())
                             .then(responseJson => {
                                 //console.log(responseJson)
@@ -363,7 +363,7 @@ export default function Editor(params) {
             const app = params.get('app')
             const file = params.get('file')
             const content = encodeURIComponent(editor.getValue())
-            fetch(`http://localhost:5000/writeFile?path=${app}/${file}&content=${content}`)
+            fetch(`https://retask-socket.onrender.com/writeFile?path=${app}/${file}&content=${content}`)
                 .then(response => response.json())
                 .then(responseJson => {
                         //console.log(responseJson)
@@ -374,7 +374,7 @@ export default function Editor(params) {
                             isClosable: true,
                         })
                         setUnsaved(false)
-                        fetch(`http://localhost:5000/addFileForGithub?app=${app}&path=${app}/${file}`)
+                        fetch(`https://retask-socket.onrender.com/addFileForGithub?app=${app}&path=${app}/${file}`)
                             .then(response => response.json())
                             .then(responseJson => {
                                 //console.log(responseJson)
@@ -538,15 +538,15 @@ const SidebarContent = ({ editor, componentEditor, functionEditor, packageEditor
 
         let prev = {...dirs}
 
-        fetch(`http://localhost:5000/readFolder?path=${id}/src`)
+        fetch(`https://retask-socket.onrender.com/readFolder?path=${id}/src`)
             .then(response => response.json())
             .then(responseJson => {
                 prev.src = responseJson
-                fetch(`http://localhost:5000/readFolder?path=${id}/src/components`)
+                fetch(`https://retask-socket.onrender.com/readFolder?path=${id}/src/components`)
                 .then(response => response.json())
                 .then(responseJson => {
                     prev.components = responseJson.filter(el => !el.endsWith('.json'))
-                    fetch(`http://localhost:5000/readFolder?path=${id}/src/utils`)
+                    fetch(`https://retask-socket.onrender.com/readFolder?path=${id}/src/utils`)
                     .then(response => response.json())
                     .then(responseJson => {
                         prev.utils = responseJson.filter(el => el !== 'index.js')
@@ -596,7 +596,7 @@ const SidebarContent = ({ editor, componentEditor, functionEditor, packageEditor
         if(!id) return 
 
         sidebarRight?.current?.removeFilefromTree(file)
-        fetch(`http://localhost:5000/deleteFile?path=${id}/src/${file}`)
+        fetch(`https://retask-socket.onrender.com/deleteFile?path=${id}/src/${file}`)
             .then(response => response.json())
             .then(responseJson => {
                 if(responseJson.res === 'success') {
@@ -611,7 +611,7 @@ const SidebarContent = ({ editor, componentEditor, functionEditor, packageEditor
         const id = searchParams.get('app')
         if(!id) return  
 
-        fetch(`http://localhost:5000/readFile?path=${id}/src/components/config_${item.substring(0, item.lastIndexOf('.'))}.json`)
+        fetch(`https://retask-socket.onrender.com/readFile?path=${id}/src/components/config_${item.substring(0, item.lastIndexOf('.'))}.json`)
             .then(response => response.text())
             .then(responseText => {
                 let code = JSON.parse(responseText)?.find(el => el?.code != null)?.code
@@ -842,7 +842,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
         setLogin(login)
 
         const id = searchParams.get('app')
-        fetch(`http://localhost:5000/readFile?path=${id}/git.json`)
+        fetch(`https://retask-socket.onrender.com/readFile?path=${id}/git.json`)
             .then(response => response.text())
             .then(async(responseText) => {
                 const code = JSON.parse(responseText)
@@ -869,7 +869,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                                     .then(() => {
                                         let prev = {...code}
                                         prev.commitSHA = commitSHA
-                                        fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                                        fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
                                             .then(response => response.json())
                                             .then(responseJson => {
                                                 setProjectInfo(prev)
@@ -879,7 +879,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                             }
                             
                             if(!code?.isSetup) {
-                                fetch(`http://localhost:5000/addDirForGithub?app=${id}`)
+                                fetch(`https://retask-socket.onrender.com/addDirForGithub?app=${id}`)
                                     .then(response => response.json())
                                     .then(async(responseJson) => {
                                         //nothing
@@ -916,7 +916,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
         let prev = {...projectInfo}
         prev.repo = repository.name 
 
-        fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+        fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
             .then(response => response.json())
             .then(responseJson => {
                 setProjectInfo(prev)
@@ -924,7 +924,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
     }
 
     const handleCommit = () => {
-        fetch(`http://localhost:5000/readFiles?files=${JSON.stringify(projectInfo?.treeFiles.filter(el => !el.endsWith('/git.json')), null, '\t')}&root=${'src/apps/' + searchParams.get('app') + '/'}`)
+        fetch(`https://retask-socket.onrender.com/readFiles?files=${JSON.stringify(projectInfo?.treeFiles.filter(el => !el.endsWith('/git.json')), null, '\t')}&root=${'src/apps/' + searchParams.get('app') + '/'}`)
             .then(response => response.json())
             .then(async(responseJson) => {
                 const {
@@ -950,7 +950,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                 let prev = {...projectInfo}
                 prev.newCommitSHA = newCommitSHA
 
-                fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
                 .then(response => response.json())
                 .then(responseJson => {
                     setProjectInfo(prev)
@@ -968,15 +968,15 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
     const updateAppearance = () => {
         return new Promise((resolve, reject) => {
             const id = searchParams.get('app')
-            fetch(`http://localhost:5000/createPublicFolder?app=${id}`)
+            fetch(`https://retask-socket.onrender.com/createPublicFolder?app=${id}`)
                 .then(response => response.json())
                 .then((responseJson) => {
                     if(responseJson.res === 'success') {
-                        fetch(`http://localhost:5000/glob?path=${id}/public`)
+                        fetch(`https://retask-socket.onrender.com/glob?path=${id}/public`)
                         .then(response => response.json())
                         .then((responseJson) => {
                             const paths = [...responseJson, 'src/apps/' + id + '/appearance.json']
-                            fetch(`http://localhost:5000/readFiles?files=${JSON.stringify(paths)}&root=${'src/apps/' + searchParams.get('app') + '/'}`)
+                            fetch(`https://retask-socket.onrender.com/readFiles?files=${JSON.stringify(paths)}&root=${'src/apps/' + searchParams.get('app') + '/'}`)
                             .then(response => response.json())
                             .then(async(responseJson) => {
                                 let iconFile = responseJson.find(el => el.path.includes('public/icon.'))
@@ -1026,7 +1026,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                                 prev.commitSHA = newCommitSHA
                                 prev.newCommitSHA = ""
 
-                                fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+                                fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
                                 .then(response => response.json())
                                 .then(responseJson => {
                                     setProjectInfo(prev)
@@ -1045,14 +1045,14 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                                             path: iconExists.replace('src/apps/' + id + '/', '')
                                         })
                                         .then(data => {
-                                            fetch(`http://localhost:5000/cleanPublicFolder?app=${id}&icon=${data.data.download_url}`)
+                                            fetch(`https://retask-socket.onrender.com/cleanPublicFolder?app=${id}&icon=${data.data.download_url}`)
                                             .then(response => response.json())
                                             .then((responseJson) => {
                                                 resolve()
                                             })
                                         })
                                     } else {
-                                        fetch(`http://localhost:5000/cleanPublicFolder?app=${id}`)
+                                        fetch(`https://retask-socket.onrender.com/cleanPublicFolder?app=${id}`)
                                         .then(response => response.json())
                                         .then((responseJson) => {
                                             resolve()
@@ -1075,7 +1075,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                     path: 'appearance.json'
                 }).then(res => {
                     let remoteAppearance = atob(res.data.content)
-                    fetch(`http://localhost:5000/readFile?path=${searchParams.get('app')}/appearance.json`)
+                    fetch(`https://retask-socket.onrender.com/readFile?path=${searchParams.get('app')}/appearance.json`)
                     .then(response => response.text())
                     .then((responseText) => {
                         if(remoteAppearance !== responseText) {
@@ -1105,7 +1105,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
             prev.commitSHA = projectInfo?.newCommitSHA
             prev.newCommitSHA = ""
     
-            fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+            fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
                 .then(response => response.json())
                 .then(responseJson => {
                     setProjectInfo(prev)
@@ -1147,7 +1147,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
                     })
 
                     await fetch(
-                        `http://localhost:5000/writeFile?path=${searchParams.get('app')}/${el.filename}&content=${encodeURIComponent(atob(data.content))}`)
+                        `https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/${el.filename}&content=${encodeURIComponent(atob(data.content))}`)
                     //const responseJson = await response.json()
                     //console.log(responseJson)
                 }
@@ -1167,7 +1167,7 @@ const SidebarContentRight = forwardRef(({ onClose, editor, token, userInfo, uid,
         let prev = {...projectInfo}
         prev.treeFiles = prev.treeFiles.map(i => i.endsWith(file) && !i.startsWith('DEL-') ? i = 'DEL-' + i : i)
 
-        fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
+        fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/git.json&content=${JSON.stringify(prev, null, '\t')}`)
             .then(response => response.json())
             .then(responseJson => {
                 setProjectInfo(prev)
@@ -1310,7 +1310,7 @@ const NewFileModal = forwardRef((props, ref) => {
 
     const handleFileCreation = () => {
         if(name.endsWith('.js') || name.endsWith('.jsx') || name.endsWith('.tsx') || name.endsWith('.ts')) {
-            fetch(`http://localhost:5000/newFile?path=${searchParams.get('app')}/${fileType}/${name}`)
+            fetch(`https://retask-socket.onrender.com/newFile?path=${searchParams.get('app')}/${fileType}/${name}`)
                 .then(response => response.json())
                 .then(responseJson => {
                     if(responseJson.res !== 'success') {
@@ -1328,7 +1328,7 @@ const NewFileModal = forwardRef((props, ref) => {
                             onClose()
                         } else if(fileType === 'utils') {
                             const content = `export * from './${name}';`
-                            fetch(`http://localhost:5000/writeFile?path=${searchParams.get('app')}/src/utils/index.js&content=${content}&type=append`)
+                            fetch(`https://retask-socket.onrender.com/writeFile?path=${searchParams.get('app')}/src/utils/index.js&content=${content}&type=append`)
                             .then(response => response.json())
                             .then(responseJson => {
                                 onClose()
@@ -1388,7 +1388,7 @@ const FunctionsEditor = forwardRef((prop, ref) => {
         open(name, id) {
             setApp(id)
             setData({})
-            fetch(`http://localhost:5000/readFile?path=${id}/src/utils/${name}`)
+            fetch(`https://retask-socket.onrender.com/readFile?path=${id}/src/utils/${name}`)
             .then(response => response.text())
             .then(responseText => {
                 const code = responseText
@@ -1409,7 +1409,7 @@ const FunctionsEditor = forwardRef((prop, ref) => {
     }))
 
     const handleSave = () => {
-        fetch(`http://localhost:5000/writeFile?path=${app}/src/utils/${data?.name}&content=${encodeURIComponent(data?.code)}`)
+        fetch(`https://retask-socket.onrender.com/writeFile?path=${app}/src/utils/${data?.name}&content=${encodeURIComponent(data?.code)}`)
             .then(response => response.json())
             .then(responseJson => {
                 //console.log(responseJson)
@@ -1496,7 +1496,7 @@ const PackageEditor = forwardRef((props, ref) => {
             setData({})
             setNewType('')
             setApp(id)
-            fetch(`http://localhost:5000/readFile?path=${id}/package.json`)
+            fetch(`https://retask-socket.onrender.com/readFile?path=${id}/package.json`)
             .then(response => response.text())
             .then(responseText => {
                 const code = JSON.parse(responseText)
@@ -1519,7 +1519,7 @@ const PackageEditor = forwardRef((props, ref) => {
     }
 
     const handleSave = () => {
-        fetch(`http://localhost:5000/writeFile?path=${app}/package.json&content=${encodeURIComponent(JSON.stringify(data, null, '\t'))}`)
+        fetch(`https://retask-socket.onrender.com/writeFile?path=${app}/package.json&content=${encodeURIComponent(JSON.stringify(data, null, '\t'))}`)
             .then(response => response.json())
             .then(responseJson => {
                 //console.log(responseJson)

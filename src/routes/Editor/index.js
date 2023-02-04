@@ -472,7 +472,7 @@ export default function Editor(params) {
                             }} id="resizer-block">
                                 <Text color="whiteAlpha.500" fontSize={14} ml={5}>Preview</Text>
                             </div>
-                            <iframe title="Preview" id="preview-iframe" src={"http://localhost:3000/apps/" + searchParams.get('app')} loading="lazy" />
+                            <iframe title="Preview" id="preview-iframe" src={"https://retask.onrender.com/apps/" + searchParams.get('app')} loading="lazy" />
                     </Box> : null}
                 </GridItem>
                 <GridItem colSpan={1} h='100%'>

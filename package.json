@@ -1,5 +1,5 @@
 {
-  "name": "retask",
+  "name": "reax",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -16,7 +16,7 @@
     "console-feed": "^3.4.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "firebase": "^9.16.0",
+    "firebase": "9.16.0",
     "firebaseui": "^6.0.2",
     "framer-motion": "^7.10.2",
     "fs": "^0.0.1-security",
